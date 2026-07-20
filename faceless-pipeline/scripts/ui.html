@@ -50,7 +50,12 @@
   #console .err { color: var(--red); }
   textarea { width: 100%; height: 240px; background: #08090c; color: #cfe; border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; resize: vertical; }
   #tsview { display: none; margin-top: 10px; max-height: 320px; overflow: auto; background: #08090c; border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; white-space: pre-wrap; color: #c8ccd4; }
-  #videos { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  #videos { display: block; }
+  .vgroup { margin-bottom: 22px; }
+  .vproj { font-size: 15px; font-weight: 700; color: var(--text); margin: 6px 0 8px; }
+  .vbucket { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 12px 0 8px; }
+  .vrow { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .vid .name b { color: var(--accent); }
   .vid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
   .vid video { display: block; border-radius: 8px; background: #000; height: 360px; width: auto; max-width: 100%; }
   .vid .meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
@@ -71,6 +76,18 @@
   #tray img { width: 78px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: grab; display: block; }
   #tray img.used { opacity: 0.28; }
   #tray .lbl { position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: #000a; padding: 1px 5px; border-radius: 3px; color: #fff; }
+  /* hook editor */
+  #hkcues { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 6px; background: #08090c; }
+  .hkcue { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 12px; }
+  .hkcue.inwin { background: #6c8cff22; }
+  .hkcue .t { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 46px; flex: none; }
+  .hkcue .x { flex: 1; color: #cbd0d8; min-width: 0; }
+  .hkcue .set { display: flex; gap: 4px; opacity: 0; transition: .1s; }
+  .hkcue:hover .set { opacity: 1; }
+  .num { width: 72px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .hkchip { display: inline-flex; align-items: center; gap: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; }
+  .hkchip b { color: var(--accent); }
+  .hkprev { font-size: 12px; color: #cbd0d8; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; min-height: 20px; }
 </style>
 </head>
 <body>
@@ -91,7 +108,12 @@
       <button onclick="refresh()" class="tiny">↻ Actualizar</button>
     </div>
 
-    <h3>1 · Preparar</h3>
+    <h3>1 · Validar</h3>
+    <div class="row">
+      <button data-cmd="check" class="go">✅ Revisar config (huecos, archivos, hooks)</button>
+    </div>
+
+    <h3>2 · Preparar</h3>
     <div class="row">
       <button data-cmd="timestamps">⏱ Timestamps (Groq)</button>
       <button data-cmd="enhance">🖼 Mejorar imágenes</button>
@@ -99,14 +121,15 @@
       <button data-cmd="transcribe">💬 Subtítulos (Groq)</button>
       <button data-cmd="master">🎚 Masterizar audio</button>
       <button data-cmd="manifest">🧩 Manifest</button>
-      <button data-cmd="prepare" class="go">⚙️ Preparar TODO</button>
+      <button data-cmd="build" class="go">⚙️ Preparar TODO (build)</button>
     </div>
 
-    <h3>2 · Renderizar</h3>
+    <h3>3 · Renderizar</h3>
     <div class="row">
-      <button data-cmd="render-full" class="go">🎬 Video completo (H+V)</button>
+      <button data-cmd="render-all" class="go">🎬 Renderizar TODO</button>
+      <button data-cmd="render-full">🖥 Completo (H+V)</button>
       <button data-cmd="render-clips">✂️ Clips por tanda</button>
-      <button data-cmd="render-hooks">⚓ Clips de gancho</button>
+      <button data-cmd="render-hooks">⚓ Hooks</button>
       <button onclick="studio()">🎛 Studio (preview)</button>
     </div>
 
@@ -155,6 +178,46 @@
         </div>
       </div>
       <div id="sbmsg" class="status" style="margin-top:10px; word-break:break-all"></div>
+    </div>
+
+    <h3>⚓ Editor de hooks (clips de gancho) <button class="tiny" onclick="loadHooks()">↻ Cargar</button></h3>
+    <div class="card">
+      <div class="bar" style="margin-bottom:10px">
+        Tanda: <select id="hkBlock"></select>
+        <span id="hkdur" class="status"></span>
+        <span style="flex:1"></span>
+        <span class="status">Lee los subtítulos y marca dónde empieza/termina el gancho →</span>
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap">
+        <div style="flex:2; min-width:280px">
+          <div id="hkcues"><span class="status">Dale "Cargar" (necesita subtítulos: corre 💬 Subtítulos).</span></div>
+        </div>
+        <div style="flex:1; min-width:240px; display:flex; flex-direction:column; gap:10px">
+          <div class="row" style="align-items:center">
+            <span class="status">Inicio</span><input id="hkStart" class="num" type="number" step="0.1" min="0" value="0">
+            <span class="status">Fin</span><input id="hkEnd" class="num" type="number" step="0.1" min="0" value="0">
+          </div>
+          <div class="hkprev" id="hkPrev">—</div>
+          <div class="row" style="align-items:center">
+            <input id="hkId" class="num" style="width:90px" placeholder="id" title="id único, ej: apertura">
+            <input id="hkLabel" class="num" style="flex:1;width:auto" placeholder="etiqueta (opcional)">
+          </div>
+          <div class="row">
+            <button class="go" onclick="addHook()">➕ Agregar / actualizar hook</button>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Hooks del proyecto:</div>
+        <div id="hklist" class="row"></div>
+      </div>
+      <div class="row" style="margin-top:12px; align-items:center">
+        <button class="go" onclick="saveHooks()">💾 Guardar hooks</button>
+        <button class="tiny" onclick="run('manifest','Manifest')">🧩 Manifest</button>
+        <button class="tiny" onclick="run('render-hooks','Render hooks')">⚓ Renderizar hooks</button>
+        <a class="btn" href="/HOOKS.md" target="_blank"><button class="tiny">📖 Estrategia</button></a>
+        <span id="hkmsg" class="status"></span>
+      </div>
     </div>
 
     <h3>Config (projects.config.json)</h3>
@@ -274,24 +337,61 @@ async function refresh() {
   const p = st.projects.find((x) => x.id === sel.value) || st.projects[0];
   $("#pinfo").textContent = p ? p.blocks + " bloques · " + (p.look || "sin look") + " · " + (p.captions ? "subs on" : "subs off") : "";
 
-  const vids = $("#videos");
-  vids.innerHTML = "";
-  if (!st.videos.length) vids.innerHTML = '<span class="status">Aún no hay videos. Renderiza arriba.</span>';
-  st.videos.forEach((v) => {
-    const isVert = /short|-v\b|vertical/i.test(v.name);
-    const d = document.createElement("div");
-    d.className = "vid";
-    d.innerHTML =
-      '<video controls preload="metadata" src="/out/' + encodeURIComponent(v.name) + '"></video>' +
-      '<div class="meta"><span class="name">' + (isVert ? "📱" : "🖥") + " " + v.name + " · " + v.size + "</span>" +
-      '<a class="btn" href="/out/' + encodeURIComponent(v.name) + '" download><button class="tiny">⬇</button></a>' +
-      '<button class="tiny" onclick="reveal(\'' + v.name + '\')">📂</button></div>';
-    vids.appendChild(d);
-  });
+  renderVideos(st.videos);
+}
+
+// Parsea el nombre del MP4 en {project, bucket, badge}.
+//   moises-full-1080p.mp4      → horizontal
+//   moises-full-short.mp4      → vertical
+//   moises-clip-cap1-short.mp4 → vertical (clip)
+//   moises-hook-apertura-short.mp4 → hook
+function parseVideo(name) {
+  const m = name.match(/^(.+?)-(full|clip|hook)-(?:(.+)-)?(1080p|short)\.mp4$/i);
+  if (!m) return { project: "otros", bucket: "Otros", badge: "", order: 9 };
+  const [, project, kind, id, fmt] = m;
+  const horizontal = /1080p/i.test(fmt);
+  if (kind === "hook") return { project, bucket: "⚓ Hooks", badge: id || "", order: 3 };
+  if (kind === "clip") return { project, bucket: horizontal ? "🖥 Horizontal" : "📱 Vertical", badge: "clip " + (id || ""), order: horizontal ? 1 : 2 };
+  return { project, bucket: horizontal ? "🖥 Horizontal" : "📱 Vertical", badge: "completo", order: horizontal ? 1 : 2 };
+}
+
+function renderVideos(videos) {
+  const wrap = $("#videos");
+  wrap.innerHTML = "";
+  if (!videos || !videos.length) { wrap.innerHTML = '<span class="status">Aún no hay videos. Renderiza arriba.</span>'; return; }
+  // agrupa: proyecto → bucket → [videos]
+  const byProject = {};
+  for (const v of videos) {
+    const p = parseVideo(v.name);
+    (byProject[p.project] ??= {});
+    (byProject[p.project][p.bucket] ??= { order: p.order, items: [] });
+    byProject[p.project][p.bucket].items.push({ ...v, badge: p.badge });
+  }
+  for (const project of Object.keys(byProject).sort()) {
+    const pdiv = document.createElement("div"); pdiv.className = "vgroup";
+    pdiv.innerHTML = '<div class="vproj">📦 ' + project + '</div>';
+    const buckets = Object.entries(byProject[project]).sort((a, b) => a[1].order - b[1].order);
+    for (const [bucket, data] of buckets) {
+      const bd = document.createElement("div");
+      bd.innerHTML = '<div class="vbucket">' + bucket + ' <span class="status">(' + data.items.length + ')</span></div>';
+      const rowEl = document.createElement("div"); rowEl.className = "vrow";
+      data.items.forEach((v) => {
+        const d = document.createElement("div"); d.className = "vid";
+        d.innerHTML =
+          '<video controls preload="metadata" src="/out/' + encodeURIComponent(v.name) + '"></video>' +
+          '<div class="meta"><span class="name">' + (v.badge ? '<b>' + v.badge + '</b> · ' : '') + v.size + '</span>' +
+          '<a class="btn" href="/out/' + encodeURIComponent(v.name) + '" download><button class="tiny">⬇</button></a>' +
+          '<button class="tiny" onclick="reveal(\'' + v.name + '\')">📂</button></div>';
+        rowEl.appendChild(d);
+      });
+      bd.appendChild(rowEl); pdiv.appendChild(bd);
+    }
+    wrap.appendChild(pdiv);
+  }
 }
 async function reveal(name) { await fetch("/api/reveal?file=" + encodeURIComponent(name)); toast("📂 Mostrando en Finder…"); }
 
-$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; });
+$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); });
 
 async function viewTs() {
   const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
@@ -420,7 +520,100 @@ async function applyScenes() {
 }
 $("#sbBlock").addEventListener("change", renderBuilder);
 
-refresh(); loadConfig(); loadHealth();
+// ---- Editor de hooks ----
+let hkBlocks = [], hkHooks = [];
+const hkFmt = (s) => { const m = Math.floor(s / 60); const ss = (s % 60).toFixed(1).padStart(4, "0"); return m + ":" + ss; };
+function hkCurBlock() { return hkBlocks.find((b) => b.id === $("#hkBlock").value); }
+
+async function loadHooks() {
+  const project = $("#project").value;
+  const d = await (await fetch("/api/project-detail?project=" + encodeURIComponent(project))).json();
+  hkBlocks = d.blocks || [];
+  hkHooks = (d.hooks || []).map((h) => ({ ...h }));
+  const sel = $("#hkBlock");
+  sel.innerHTML = "";
+  hkBlocks.forEach((b) => { const o = document.createElement("option"); o.value = b.id; o.textContent = b.id + " · " + b.duration + "s"; sel.appendChild(o); });
+  renderHkCues(); renderHkList();
+}
+function renderHkCues() {
+  const b = hkCurBlock();
+  $("#hkdur").textContent = b ? "(dura " + b.duration + "s)" : "";
+  const box = $("#hkcues");
+  if (!b || !b.cues.length) { box.innerHTML = '<span class="status">Sin subtítulos para esta tanda. Corre 💬 Subtítulos (Groq).</span>'; return; }
+  box.innerHTML = "";
+  b.cues.forEach((c) => {
+    const row = document.createElement("div"); row.className = "hkcue"; row.dataset.s = c.start; row.dataset.e = c.end;
+    row.innerHTML = '<span class="t">' + hkFmt(c.start) + '</span><span class="x">' + c.text + '</span>' +
+      '<span class="set"><button class="tiny" title="empezar aquí">⟤</button><button class="tiny" title="terminar aquí">⟥</button></span>';
+    const [bs, be] = row.querySelectorAll("button");
+    bs.onclick = () => { $("#hkStart").value = c.start.toFixed(1); updateHkPreview(); };
+    be.onclick = () => { $("#hkEnd").value = c.end.toFixed(1); updateHkPreview(); };
+    box.appendChild(row);
+  });
+  if (!(+$("#hkEnd").value)) $("#hkEnd").value = b.duration.toFixed(1);
+  updateHkPreview();
+}
+function updateHkPreview() {
+  const b = hkCurBlock(); if (!b) return;
+  const s = +$("#hkStart").value, e = +$("#hkEnd").value;
+  let txt = [], nIn = 0;
+  document.querySelectorAll("#hkcues .hkcue").forEach((row) => {
+    const cs = +row.dataset.s, ce = +row.dataset.e;
+    const inwin = ce > s && cs < e;
+    row.classList.toggle("inwin", inwin);
+    if (inwin) { txt.push(row.querySelector(".x").textContent); nIn++; }
+  });
+  const dur = Math.max(0, e - s);
+  let warn = "";
+  if (dur < 3) warn = " · ⚠️ muy corto";
+  else if (dur > 40) warn = " · ⚠️ muy largo";
+  else if (dur >= 10 && dur <= 25) warn = " · ✅ ideal";
+  $("#hkPrev").innerHTML = '<b>' + dur.toFixed(1) + 's</b>' + warn + '<br>' + (txt.join(" ") || "<span class=\"status\">(nada en la ventana)</span>");
+}
+function addHook() {
+  const b = hkCurBlock(); if (!b) return;
+  const id = ($("#hkId").value || "").trim().replace(/\s+/g, "-");
+  if (!id) { toast("Ponle un id al hook"); return; }
+  const s = +$("#hkStart").value, e = +$("#hkEnd").value;
+  if (e <= s) { toast("El fin debe ser mayor que el inicio"); return; }
+  const hook = { id, label: ($("#hkLabel").value || "").trim() || id, block: b.id, start: +s.toFixed(1), end: +e.toFixed(1) };
+  const i = hkHooks.findIndex((h) => h.id === id);
+  if (i >= 0) hkHooks[i] = hook; else hkHooks.push(hook);
+  $("#hkId").value = ""; $("#hkLabel").value = "";
+  renderHkList(); toast("⚓ Hook '" + id + "' listo. No olvides 💾 Guardar.");
+}
+function renderHkList() {
+  const box = $("#hklist"); box.innerHTML = "";
+  if (!hkHooks.length) { box.innerHTML = '<span class="status">Sin hooks. Crea uno arriba.</span>'; return; }
+  hkHooks.forEach((h) => {
+    const win = h.block != null ? h.block + " " + (h.start ?? 0) + "–" + (h.end ?? "?") + "s" : (h.blocks || []).join("+");
+    const chip = document.createElement("span"); chip.className = "hkchip";
+    chip.innerHTML = '<b>' + h.id + '</b> <span class="status">' + win + '</span>';
+    const edit = document.createElement("button"); edit.className = "tiny"; edit.textContent = "✏"; edit.title = "editar";
+    edit.onclick = () => editHook(h.id);
+    const del = document.createElement("button"); del.className = "tiny"; del.textContent = "✕"; del.title = "quitar";
+    del.onclick = () => { hkHooks = hkHooks.filter((x) => x.id !== h.id); renderHkList(); };
+    chip.appendChild(edit); chip.appendChild(del); box.appendChild(chip);
+  });
+}
+function editHook(id) {
+  const h = hkHooks.find((x) => x.id === id); if (!h || h.block == null) { toast("Ese hook es de bloques enteros; edítalo en el config."); return; }
+  if (hkBlocks.some((b) => b.id === h.block)) { $("#hkBlock").value = h.block; renderHkCues(); }
+  $("#hkStart").value = h.start ?? 0; $("#hkEnd").value = h.end ?? 0; $("#hkId").value = h.id; $("#hkLabel").value = h.label || "";
+  updateHkPreview();
+}
+async function saveHooks() {
+  const r = await fetch("/api/save-hooks", { method: "POST", body: JSON.stringify({ project: $("#project").value, hooks: hkHooks }) });
+  const j = await r.json();
+  $("#hkmsg").textContent = j.ok ? "✅ guardado — ahora 🧩 Manifest y ⚓ Renderizar hooks" : "❌ " + j.error;
+  if (j.ok) { loadConfig(); toast("💾 Hooks guardados"); }
+  setTimeout(() => ($("#hkmsg").textContent = ""), 5000);
+}
+$("#hkBlock").addEventListener("change", () => { $("#hkEnd").value = 0; renderHkCues(); });
+$("#hkStart").addEventListener("input", updateHkPreview);
+$("#hkEnd").addEventListener("input", updateHkPreview);
+
+refresh(); loadConfig(); loadHealth(); loadHooks();
 </script>
 </body>
 </html>

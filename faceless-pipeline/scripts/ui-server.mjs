@@ -32,13 +32,16 @@ const OUT = join(ROOT, "out");
 
 // comandos permitidos (allowlist)
 const COMMANDS = {
+  check: "node scripts/check.mjs",
   timestamps: "node scripts/timestamps-md.mjs",
   enhance: "node scripts/enhance-images.mjs",
   "enhance-force": "node scripts/enhance-images.mjs --force",
   transcribe: "node scripts/transcribe-cloud.mjs",
   manifest: "node scripts/build-manifest.mjs",
   master: "node scripts/master-audio.mjs",
+  captions: "node scripts/captions-from-script.mjs",
   prepare: "node scripts/enhance-images.mjs && node scripts/master-audio.mjs && node scripts/transcribe-cloud.mjs && node scripts/build-manifest.mjs",
+  build: "node scripts/check.mjs && node scripts/enhance-images.mjs && node scripts/captions-from-script.mjs && node scripts/build-manifest.mjs",
   "render-full": "node scripts/render.mjs --full",
   "render-clips": "node scripts/render.mjs --clips",
   "render-hooks": "node scripts/render.mjs --hooks",
@@ -278,6 +281,61 @@ const server = createServer((req, res) => {
       } catch (e) { json(res, { ok: false, error: e.message }, 400); }
     });
     return;
+  }
+
+  // detalle de un proyecto para el editor de hooks: bloques de media con la
+  // línea de subtítulos (texto + tiempos) para elegir la ventana del gancho.
+  if (path === "/api/project-detail") {
+    const project = url.searchParams.get("project") || "";
+    let cfg;
+    try { cfg = JSON.parse(readFileSync(CONFIG, "utf8")); } catch { return json(res, { blocks: [], hooks: [] }); }
+    const p = (cfg.projects || []).find((x) => x.id === project);
+    if (!p) return json(res, { blocks: [], hooks: [] });
+    const blocks = [];
+    for (const b of p.blocks || []) {
+      if (b.card !== undefined) continue; // los separadores no sirven de hook
+      // subtítulos (fuente más fresca del contenido): data/captions/<proj>__<block>.json
+      let cues = [], duration = 0;
+      try {
+        const capData = JSON.parse(readFileSync(join(ROOT, "data", "captions", `${project}__${b.id}.json`), "utf8"));
+        cues = (capData.captions || []).map((c) => ({ start: (c.startMs ?? 0) / 1000, end: (c.endMs ?? 0) / 1000, text: c.text }));
+        if (cues.length) duration = cues[cues.length - 1].end;
+      } catch {}
+      // duración de respaldo: último end de las imágenes del config
+      if (!duration && Array.isArray(b.images) && b.images.length) {
+        const last = b.images[b.images.length - 1];
+        duration = typeof last === "object" ? (last.end ?? 0) : 0;
+      }
+      blocks.push({ id: b.id, duration: Math.round(duration * 10) / 10, cues });
+    }
+    return json(res, { blocks, hooks: p.hooks || [] });
+  }
+
+  // guardar los hooks de un proyecto en el config
+  if (path === "/api/save-hooks") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, hooks } = JSON.parse(body);
+        const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+        const p = (cfg.projects || []).find((x) => x.id === project);
+        if (!p) return json(res, { ok: false, error: "proyecto no encontrado" }, 404);
+        p.hooks = hooks;
+        writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+        json(res, { ok: true });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
+  // servir los docs markdown (para el botón "Estrategia")
+  if (/^\/(HOOKS|FORMATO|README)\.md$/.test(path)) {
+    const file = join(ROOT, path.slice(1));
+    if (existsSync(file)) {
+      res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" });
+      return res.end(readFileSync(file));
+    }
   }
 
   if (path.startsWith("/out/")) {
