@@ -1,0 +1,65 @@
+{
+  "_ayuda": "Flujo AUDIO-FIRST: 1) deja los mp3 en ../proyectos/moises/audio/  2) 'npm run timestamps' te da los tiempos por escena  3) generas las imágenes -> ../proyectos/moises/imagenes/  4) llenas 'blocks' abajo  5) 'npm run build && npm run render'. Cada 'block' = una tanda (un audio + sus imágenes). Los subtítulos salen del audio con 'npm run transcribe:cloud'.",
+  "_ejemplo_block": {
+    "id": "cap1",
+    "audio": "../proyectos/moises/audio/cap1.mp3",
+    "images": ["cap1-01.png", "cap1-02.png", { "file": "cap1-03.png", "duration": 5 }]
+  },
+  "_ejemplo_card": { "id": "intro", "card": "MOISÉS", "subtitle": "una historia", "seconds": 2 },
+  "projects": [
+    {
+      "id": "moises",
+      "title": "Moisés",
+      "fps": 30,
+      "captions": true,
+      "look": "filmic",
+      "masterAudio": true,
+      "music": null,
+      "sourceImagesDir": "../proyectos/moises/imagenes",
+      "blocks": [
+        {
+          "id": "cap1",
+          "audio": "../proyectos/moises/audio/cap1.mp3",
+          "images": [
+            { "file": "cap1-01.png", "start": 0.0, "end": 6.0 },
+            { "file": "cap1-02.png", "start": 6.0, "end": 8.6 },
+            { "file": "cap1-03.png", "start": 8.6, "end": 11.8 },
+            { "file": "cap1-04.png", "start": 11.8, "end": 15.9 },
+            { "file": "cap1-05.png", "start": 15.9, "end": 18.7 },
+            { "file": "cap1-06.png", "start": 18.7, "end": 21.2 },
+            { "file": "cap1-07.png", "start": 21.2, "end": 25.6 },
+            { "file": "cap1-08.png", "start": 25.6, "end": 30.5 },
+            { "file": "cap2-01.png", "start": 30.5, "end": 35.0 },
+            { "file": "cap2-02.png", "start": 35.0, "end": 40.2 },
+            { "file": "cap2-03.png", "start": 40.2, "end": 45.1 },
+            { "file": "cap2-04.png", "start": 45.1, "end": 48.8 }
+          ]
+        },
+        { "id": "sep-cap2", "card": "YEARS EARLIER", "seconds": 1.5, "sfx": "sparkle" },
+        {
+          "id": "cap2",
+          "audio": "../proyectos/moises/audio/cap2.mp3",
+          "images": [
+            { "file": "cap2-05.png", "start": 0.0, "end": 17.1 },
+            { "file": "cap2-06.png", "start": 17.1, "end": 20.4 },
+            { "file": "cap2-07.png", "start": 20.4, "end": 23.3 },
+            { "file": "cap2-08.png", "start": 23.5, "end": 26.5 },
+            { "file": "cap2-09.png", "start": 26.5, "end": 30.9 },
+            { "file": "cap2-10.png", "start": 30.9, "end": 34.9 },
+            { "file": "cap2-11.png", "start": 34.9, "end": 38.9 },
+            { "file": "cap2-12.png", "start": 38.9, "end": 42.9 },
+            { "file": "cap2-13.png", "start": 42.9, "end": 45.5 },
+            { "file": "cap2-14.png", "start": 45.5, "end": 48.1 },
+            { "file": "cap2-15.png", "start": 48.1, "end": 52.1 },
+            { "file": "cap2-16.png", "start": 52.1, "end": 56.1 },
+            { "file": "cap2-17.png", "start": 56.1, "end": 59.7 },
+            { "file": "cap2-18.png", "start": 59.7, "end": 62.4 },
+            { "file": "cap2-19.png", "start": 62.4, "end": 64.6 },
+            { "file": "cap2-20.png", "start": 64.6, "end": 68.3 }
+          ]
+        }
+      ],
+      "hooks": []
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+#!/usr/bin/env node
+/**
+ * ui-server.mjs — Interfaz web local para manejar el pipeline con botones.
+ * Corre: npm run ui   (abre http://localhost:4599)
+ */
+import { createServer } from "node:http";
+import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, "..");
+const PORT = 4599;
+const CONFIG = join(ROOT, "projects.config.json");
+const HTML = join(__dirname, "ui.html");
+const OUT = join(ROOT, "out");
+
+// comandos permitidos (allowlist)
+const COMMANDS = {
+  timestamps: "node scripts/timestamps-md.mjs",
+  enhance: "node scripts/enhance-images.mjs",
+  "enhance-force": "node scripts/enhance-images.mjs --force",
+  transcribe: "node scripts/transcribe-cloud.mjs",
+  manifest: "node scripts/build-manifest.mjs",
+  master: "node scripts/master-audio.mjs",
+  prepare: "node scripts/enhance-images.mjs && node scripts/master-audio.mjs && node scripts/transcribe-cloud.mjs && node scripts/build-manifest.mjs",
+  "render-full": "node scripts/render.mjs --full",
+  "render-clips": "node scripts/render.mjs --clips",
+  "render-hooks": "node scripts/render.mjs --hooks",
+  "render-all": "node scripts/render.mjs",
+};
+
+let currentChild = null; // comando en curso (para poder detenerlo)
+
+const json = (res, obj, code = 200) => {
+  res.writeHead(code, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(obj));
+};
+
+function getState() {
+  let projects = [];
+  try {
+    const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+    projects = (cfg.projects || []).map((p) => ({
+      id: p.id,
+      title: p.title || p.id,
+      blocks: (p.blocks || []).length,
+      look: p.look || null,
+      captions: !!p.captions,
+    }));
+  } catch {}
+  let videos = [];
+  try {
+    videos = readdirSync(OUT)
+      .filter((f) => f.endsWith(".mp4"))
+      .map((f) => ({ name: f, size: (statSync(join(OUT, f)).size / 1048576).toFixed(1) + " MB" }));
+  } catch {}
+  return { projects, videos };
+}
+
+function serveVideo(req, res, filePath) {
+  const stat = statSync(filePath);
+  const range = req.headers.range;
+  if (range) {
+    const m = range.match(/bytes=(\d+)-(\d*)/);
+    const start = parseInt(m[1], 10);
+    const end = m[2] ? parseInt(m[2], 10) : stat.size - 1;
+    res.writeHead(206, {
+      "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": end - start + 1,
+      "Content-Type": "video/mp4",
+    });
+    createReadStream(filePath, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, { "Content-Length": stat.size, "Content-Type": "video/mp4", "Accept-Ranges": "bytes" });
+    createReadStream(filePath).pipe(res);
+  }
+}
+
+const server = createServer((req, res) => {
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const path = url.pathname;
+
+  if (path === "/" || path === "/index.html") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(readFileSync(HTML));
+    return;
+  }
+
+  if (path === "/api/state") return json(res, getState());
+
+  if (path === "/api/config") {
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try {
+          JSON.parse(body);
+          writeFileSync(CONFIG, body);
+          json(res, { ok: true });
+        } catch (e) {
+          json(res, { ok: false, error: e.message }, 400);
+        }
+      });
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end(readFileSync(CONFIG, "utf8"));
+    return;
+  }
+
+  if (path === "/api/open") {
+    const what = url.searchParams.get("what");
+    const project = url.searchParams.get("project") || "";
+    let target = OUT;
+    if (what === "audio") target = resolve(ROOT, `../proyectos/${project}/audio`);
+    else if (what === "imagenes") target = resolve(ROOT, `../proyectos/${project}/imagenes`);
+    else if (what === "timestamps") target = join(ROOT, "data", "timestamps");
+    spawn("open", [target]);
+    return json(res, { ok: true });
+  }
+
+  if (path === "/api/studio") {
+    const child = spawn("npx", ["remotion", "studio", "src/index.ts"], { cwd: ROOT, detached: true, stdio: "ignore" });
+    child.unref();
+    return json(res, { ok: true, url: "http://localhost:3000" });
+  }
+
+  if (path === "/api/run") {
+    const cmdKey = url.searchParams.get("cmd");
+    const project = url.searchParams.get("project") || "";
+    let cmd = COMMANDS[cmdKey];
+    if (!cmd) {
+      res.writeHead(400);
+      res.end("comando no permitido");
+      return;
+    }
+    if (project && (cmdKey.startsWith("render") || cmdKey === "timestamps")) cmd += ` --project=${project}`;
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+    res.write(`data: $ ${cmd}\n\n`);
+    const child = spawn("sh", ["-c", cmd], { cwd: ROOT, detached: true });
+    currentChild = child;
+    const send = (buf) =>
+      buf
+        .toString()
+        .split("\n")
+        .forEach((l) => {
+          const line = l.replace(/\r/g, "");
+          if (line.trim()) res.write(`data: ${line}\n\n`);
+        });
+    child.stdout.on("data", send);
+    child.stderr.on("data", send);
+    child.on("close", (code) => {
+      if (currentChild === child) currentChild = null;
+      res.write(`event: done\ndata: ${code}\n\n`);
+      res.end();
+    });
+    // no matamos el proceso si se cierra la pestaña: el render sigue en background
+    return;
+  }
+
+  if (path === "/api/stop") {
+    if (currentChild) {
+      try { process.kill(-currentChild.pid, "SIGTERM"); } catch { try { currentChild.kill("SIGTERM"); } catch {} }
+    }
+    return json(res, { ok: true });
+  }
+
+  if (path === "/api/timestamps") {
+    const project = url.searchParams.get("project") || "";
+    const f = join(ROOT, "data", "timestamps", `${project}.md`);
+    if (existsSync(f)) {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end(readFileSync(f));
+    } else {
+      res.writeHead(404);
+      res.end("");
+    }
+    return;
+  }
+
+  if (path === "/api/reveal") {
+    const file = join(OUT, url.searchParams.get("file") || "");
+    if (file.startsWith(OUT) && existsSync(file)) spawn("open", ["-R", file]);
+    return json(res, { ok: true });
+  }
+
+  if (path === "/api/health") {
+    let groq = false;
+    try {
+      groq = /^[\t ]*(GROQ|OPENAI)_API_KEY[\t ]*=[\t ]*.+/m.test(readFileSync(join(ROOT, ".env"), "utf8"));
+    } catch {}
+    let images = 0, cache = 0;
+    try {
+      const imgRoot = join(ROOT, "public", "projects");
+      for (const p of readdirSync(imgRoot)) {
+        try { images += readdirSync(join(imgRoot, p, "images")).filter((f) => /\.(png|jpe?g)$/i.test(f)).length; } catch {}
+      }
+    } catch {}
+    try { cache = readdirSync(join(ROOT, "bin", "upscale-cache")).filter((f) => f.endsWith(".png")).length; } catch {}
+    return json(res, { groq, images, cache });
+  }
+
+  if (path === "/api/timestamps-json") {
+    const project = url.searchParams.get("project") || "";
+    const f = join(ROOT, "data", "timestamps", `${project}.md`);
+    if (!existsSync(f)) return json(res, { chapters: [] });
+    const md = readFileSync(f, "utf8");
+    const chapters = [];
+    for (const sec of md.split(/^## Audio:/m).slice(1)) {
+      const bm = sec.match(/`[^`/]*\/([^`]+)`/) || sec.match(/`([^`]+)`/);
+      const block = bm ? bm[1] : "?";
+      const scenes = [];
+      const toSec = (t) => { const p = t.split(":"); return parseInt(p[0], 10) * 60 + parseFloat(p[1]); };
+      const rowRe = /^\|\s*\d+\s*\|\s*([\d:.]+)\s*\|\s*([\d:.]+)\s*\|[^|]*\|\s*(.*?)\s*\|/gm;
+      let m;
+      while ((m = rowRe.exec(sec))) scenes.push({ start: toSec(m[1]), end: toSec(m[2]), text: m[3].replace(/\\\|/g, "|") });
+      if (scenes.length) chapters.push({ block, scenes });
+    }
+    return json(res, { chapters });
+  }
+
+  if (path === "/api/images") {
+    const project = url.searchParams.get("project") || "";
+    let images = [];
+    try { images = readdirSync(join(ROOT, "public", "projects", project, "images")).filter((f) => /\.(png|jpe?g)$/i.test(f)).sort(); } catch {}
+    return json(res, { images });
+  }
+
+  if (path.startsWith("/img/")) {
+    const parts = decodeURIComponent(path.slice(5)).split("/");
+    const base = join(ROOT, "public", "projects");
+    const file = join(base, parts[0] || "", "images", parts[1] || "");
+    if (file.startsWith(base) && existsSync(file)) {
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "max-age=120" });
+      createReadStream(file).pipe(res);
+    } else { res.writeHead(404); res.end(); }
+    return;
+  }
+
+  if (path === "/api/apply-scenes") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, block, images } = JSON.parse(body);
+        const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+        const p = cfg.projects.find((x) => x.id === project);
+        const b = p && p.blocks.find((x) => x.id === block);
+        if (!b) return json(res, { ok: false, error: "bloque no encontrado" }, 404);
+        b.images = images;
+        writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+        json(res, { ok: true });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
+  if (path.startsWith("/out/")) {
+    const file = join(OUT, decodeURIComponent(path.slice(5)));
+    if (file.startsWith(OUT) && existsSync(file)) return serveVideo(req, res, file);
+    res.writeHead(404);
+    res.end("not found");
+    return;
+  }
+
+  res.writeHead(404);
+  res.end("not found");
+});
+
+server.listen(PORT, () => {
+  const u = `http://localhost:${PORT}`;
+  console.log(`\n🎬 Faceless Pipeline UI → ${u}\n   (Ctrl+C para cerrar)\n`);
+  spawn("open", [u]);
+});

@@ -1,0 +1,39 @@
+{
+  "name": "faceless-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pipeline automatizado para canal faceless: mejora de imagenes (upscale IA) + montaje de video con Remotion (Ken Burns, crossfades, sincronizado a narracion).",
+  "scripts": {
+    "enhance": "node scripts/enhance-images.mjs",
+    "captions": "node scripts/captions-from-script.mjs",
+    "transcribe:cloud": "node scripts/transcribe-cloud.mjs",
+    "timestamps": "node scripts/timestamps-md.mjs",
+    "transcribe": "node scripts/transcribe.mjs",
+    "manifest": "node scripts/build-manifest.mjs",
+    "master": "node scripts/master-audio.mjs",
+    "sfx": "node scripts/generate-sfx.mjs",
+    "build": "node scripts/enhance-images.mjs && node scripts/captions-from-script.mjs && node scripts/build-manifest.mjs",
+    "studio": "remotion studio src/index.ts",
+    "ui": "node scripts/ui-server.mjs",
+    "render": "node scripts/render.mjs",
+    "render:full": "node scripts/render.mjs --full",
+    "render:clips": "node scripts/render.mjs --clips",
+    "render:hooks": "node scripts/render.mjs --hooks",
+    "render:list": "node scripts/render.mjs --list"
+  },
+  "dependencies": {
+    "@remotion/captions": "^4.0.491",
+    "@remotion/cli": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.494",
+    "@remotion/install-whisper-cpp": "^4.0.491",
+    "ffmpeg-static": "^5.3.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "^4.0.0",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}

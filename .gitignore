@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────
+#  automatic-flow — qué NO entra al repo
+#
+#  Regla: entra el CÓDIGO y tus FUENTES (proyectos/).
+#  No entra nada generado, descargado, ni secreto.
+# ─────────────────────────────────────────────────────────────
+
+# --- secretos ---------------------------------------------------
+.env
+.env.local
+*.key
+
+# --- dependencias (se reinstalan con `npm install`) -------------
+node_modules/
+
+# --- binarios y modelos descargados (593 MB) --------------------
+# Real-ESRGAN, whisper.cpp, modelos .bin/.param
+faceless-pipeline/bin/
+
+# --- todo lo GENERADO por el pipeline ---------------------------
+# 579 MB — los MP4 finales
+faceless-pipeline/out/
+# 387 MB — imágenes/audio procesados
+faceless-pipeline/public/projects/
+# captions, timestamps, audio masterizado
+faceless-pipeline/data/
+# lo regenera `npm run manifest`
+faceless-pipeline/src/manifest.json
+faceless-pipeline/.tmp/
+
+# --- assets pesados descargados ---------------------------------
+# Los SFX/música se bajan de Pixabay/Mixkit (ver assets/README.md).
+# El README sí se versiona para saber qué debe haber aquí.
+faceless-pipeline/assets/sfx/
+faceless-pipeline/assets/music/
+faceless-pipeline/assets/overlays/
+
+# --- tus fuentes: solo el TEXTO, nunca los medios ---------------
+# Las imagenes y audios de cada proyecto son pesados y se regeneran
+# (IA / ElevenLabs). Se versiona el guion y las notas de produccion,
+# que es lo que de verdad no se puede recuperar.
+proyectos/**/imagenes/
+proyectos/**/audio/
+!proyectos/**/LEEME.txt
+
+# --- basura del sistema -----------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

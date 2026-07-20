@@ -1,0 +1,5 @@
+# GUION (Voice Script) — Moisés
+# Aquí va el texto EXACTO que lee ElevenLabs (tu fuente para generar la voz).
+# Los subtítulos del video se sacan del AUDIO con Groq, así que este archivo es
+# opcional para el pipeline, pero útil para tener el guion ordenado.
+# Borra estas líneas y pega tu narración cuando la tengas.

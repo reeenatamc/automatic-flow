@@ -1,0 +1,12 @@
+# El proyecto nacio en macOS y ahora se trabaja en Windows.
+# Normalizar a LF en el repo evita que cada archivo aparezca como
+# "modificado entero" al cambiar de maquina.
+* text=auto eol=lf
+
+# Binarios: que git no los toque nunca.
+*.png  binary
+*.jpg  binary
+*.mp3  binary
+*.mp4  binary
+*.wav  binary
+*.bin  binary

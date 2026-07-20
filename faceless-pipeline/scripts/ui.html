@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>🎬 Faceless Pipeline</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1015; --panel: #191b22; --panel2: #12141a; --border: #2a2d38;
+    --text: #e7e8ec; --muted: #8b8f9a; --accent: #6c8cff; --accent2: #a06cff;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  .wrap { max-width: 1150px; margin: 0 auto; padding: 0 22px 60px; }
+  header { background: linear-gradient(120deg, #1a1030, #101528 60%, #0f1015); border-bottom: 1px solid var(--border); padding: 22px 0 18px; margin-bottom: 22px; }
+  header .wrap { padding-bottom: 0; }
+  h1 { font-size: 24px; margin: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; display: inline-block; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  h3 { margin: 26px 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  .health { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 4px 11px; border-radius: 20px; background: #ffffff10; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 6px; }
+  .chip.ok { color: var(--green); border-color: #4ade8040; }
+  .chip.no { color: var(--red); border-color: #f8717140; }
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 9px 14px; font-size: 13px; cursor: pointer; transition: .12s; display: inline-flex; align-items: center; gap: 6px; }
+  button:hover:not(:disabled) { background: #262933; border-color: #3a3f4d; transform: translateY(-1px); }
+  button:disabled { opacity: 0.38; cursor: not-allowed; }
+  button.go { background: linear-gradient(90deg, var(--accent), var(--accent2)); border: none; color: #fff; font-weight: 600; }
+  button.go:hover:not(:disabled) { filter: brightness(1.12); }
+  button.stop { background: #7a2030; border-color: #a83a4a; color: #ffd9df; }
+  button.tiny { padding: 3px 9px; font-size: 11px; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; font-size: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  /* run bar */
+  #runbar { display: none; align-items: center; gap: 14px; margin: 14px 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  #runbar.on { display: flex; }
+  .spin { width: 16px; height: 16px; border: 2px solid #ffffff30; border-top-color: var(--accent); border-radius: 50%; animation: sp 0.8s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  #runlabel { font-size: 13px; flex: 1; min-width: 120px; }
+  #runtime { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  .track { flex: 2; min-width: 140px; height: 8px; background: #ffffff12; border-radius: 20px; overflow: hidden; }
+  .fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 20px; transition: width .25s; }
+  #console { background: #08090c; border: 1px solid var(--border); border-radius: 12px; padding: 14px; height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.55; color: #c8ccd4; }
+  #console .cmd { color: var(--yellow); font-weight: 600; }
+  #console .done { color: var(--blue); }
+  #console .ok { color: var(--green); }
+  #console .err { color: var(--red); }
+  textarea { width: 100%; height: 240px; background: #08090c; color: #cfe; border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; resize: vertical; }
+  #tsview { display: none; margin-top: 10px; max-height: 320px; overflow: auto; background: #08090c; border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; white-space: pre-wrap; color: #c8ccd4; }
+  #videos { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .vid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
+  .vid video { display: block; border-radius: 8px; background: #000; height: 360px; width: auto; max-width: 100%; }
+  .vid .meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .vid .name { font-size: 11px; color: var(--muted); word-break: break-all; flex: 1; }
+  .status { font-size: 12px; color: var(--muted); }
+  a.btn { text-decoration: none; }
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 13px; opacity: 0; transform: translateY(10px); transition: .25s; pointer-events: none; z-index: 100; }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #scenes { max-height: 480px; overflow: auto; }
+  .scene { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; margin-bottom: 6px; background: var(--panel2); }
+  .scene.over { border-color: var(--accent); background: #6c8cff1a; }
+  .scene .time { font-size: 11px; color: var(--muted); min-width: 98px; font-variant-numeric: tabular-nums; flex: none; }
+  .scene .txt { font-size: 12px; flex: 1; color: #cbd0d8; min-width: 0; }
+  .scene .slot { width: 72px; height: 42px; border-radius: 6px; background: #000; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; flex: none; cursor: pointer; color: var(--muted); }
+  .scene .slot img { width: 100%; height: 100%; object-fit: cover; }
+  #tray { display: flex; flex-wrap: wrap; gap: 6px; max-height: 480px; overflow: auto; align-content: flex-start; }
+  #tray .thumb { position: relative; }
+  #tray img { width: 78px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: grab; display: block; }
+  #tray img.used { opacity: 0.28; }
+  #tray .lbl { position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: #000a; padding: 1px 5px; border-radius: 3px; color: #fff; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>🎬 Faceless Pipeline</h1>
+      <div class="sub">Panel de control local · un clic por paso · progreso en vivo</div>
+      <div class="health" id="health"></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="card bar">
+      <span>Proyecto:</span>
+      <select id="project"></select>
+      <span id="pinfo" class="chip"></span>
+      <span style="flex:1"></span>
+      <button onclick="refresh()" class="tiny">↻ Actualizar</button>
+    </div>
+
+    <h3>1 · Preparar</h3>
+    <div class="row">
+      <button data-cmd="timestamps">⏱ Timestamps (Groq)</button>
+      <button data-cmd="enhance">🖼 Mejorar imágenes</button>
+      <button data-cmd="enhance-force">🖼 Mejorar (forzar)</button>
+      <button data-cmd="transcribe">💬 Subtítulos (Groq)</button>
+      <button data-cmd="master">🎚 Masterizar audio</button>
+      <button data-cmd="manifest">🧩 Manifest</button>
+      <button data-cmd="prepare" class="go">⚙️ Preparar TODO</button>
+    </div>
+
+    <h3>2 · Renderizar</h3>
+    <div class="row">
+      <button data-cmd="render-full" class="go">🎬 Video completo (H+V)</button>
+      <button data-cmd="render-clips">✂️ Clips por tanda</button>
+      <button data-cmd="render-hooks">⚓ Clips de gancho</button>
+      <button onclick="studio()">🎛 Studio (preview)</button>
+    </div>
+
+    <h3>Carpetas rápidas</h3>
+    <div class="row">
+      <button onclick="openF('audio')">📁 Audios</button>
+      <button onclick="openF('imagenes')">📁 Imágenes</button>
+      <button onclick="openF('timestamps')">📁 Timestamps</button>
+      <button onclick="openF('out')">📁 Salidas</button>
+    </div>
+
+    <div id="runbar">
+      <div class="spin"></div>
+      <span id="runlabel">Corriendo…</span>
+      <div class="track"><div class="fill" id="fill"></div></div>
+      <span id="runtime">0s</span>
+      <button class="stop" onclick="stopCmd()">■ Detener</button>
+    </div>
+
+    <h3>Consola <button class="tiny" onclick="document.getElementById('console').innerHTML=''">limpiar</button></h3>
+    <div id="console"></div>
+
+    <h3>Timestamps
+      <button class="tiny" onclick="viewTs()">👁 Ver</button>
+      <button class="tiny" onclick="copyPrompt()">📋 Copiar prompt para IA</button>
+    </h3>
+    <div id="tsview"></div>
+
+    <h3>🧩 Constructor de escenas (arrastra imagen → tiempo)</h3>
+    <div class="card">
+      <div class="bar" style="margin-bottom:12px">
+        Capítulo: <select id="sbBlock"></select>
+        <button class="tiny" onclick="loadBuilder()">↻ Cargar escenas</button>
+        <span style="flex:1"></span>
+        <button class="tiny" onclick="autoAssign()">✨ Auto-asignar en orden</button>
+        <button class="go" onclick="applyScenes()">✅ Aplicar al config</button>
+      </div>
+      <div style="display:flex; gap:16px">
+        <div style="flex:2; min-width:0">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Escenas — suelta una imagen en cada una (click en la miniatura para quitarla)</div>
+          <div id="scenes"><span class="status">Dale "Cargar escenas" (antes corre ⏱ Timestamps).</span></div>
+        </div>
+        <div style="flex:1; min-width:0">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Imágenes — arrástralas →</div>
+          <div id="tray"></div>
+        </div>
+      </div>
+      <div id="sbmsg" class="status" style="margin-top:10px; word-break:break-all"></div>
+    </div>
+
+    <h3>Config (projects.config.json)</h3>
+    <textarea id="config" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px; align-items:center">
+      <button onclick="saveConfig()" class="go">💾 Guardar</button>
+      <button onclick="formatConfig()" class="tiny">✨ Formatear JSON</button>
+      <button onclick="loadConfig()" class="tiny">↩ Recargar</button>
+      <span id="cfgmsg" class="status"></span>
+    </div>
+
+    <h3>Videos renderizados <button class="tiny" onclick="refresh()">↻</button></h3>
+    <div id="videos"></div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+let running = false, timer = null, t0 = 0, tsCache = "";
+const $ = (s) => document.querySelector(s);
+const consoleEl = $("#console");
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function log(line, forceCls) {
+  let cls = forceCls || "";
+  if (!cls) {
+    if (/^\$/.test(line)) cls = "cmd";
+    else if (/✅|✓|\bok\b|listo|Listo/.test(line)) cls = "ok";
+    else if (/⚠️|❌|error|Error|falló|fallo|no existe/i.test(line)) cls = "err";
+  }
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = line + "\n";
+  consoleEl.appendChild(span);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function parseProgress(line) {
+  let m;
+  if ((m = line.match(/Rendered (\d+)\/(\d+)(?:.*remaining:\s*([^,]+))?/i)))
+    return { pct: (+m[1] / +m[2]) * 100, label: "Renderizando " + m[1] + "/" + m[2] + (m[3] ? " · faltan " + m[3].trim() : "") };
+  if ((m = line.match(/Encoded (\d+)\/(\d+)/i))) return { pct: (+m[1] / +m[2]) * 100, label: "Codificando " + m[1] + "/" + m[2] };
+  if ((m = line.match(/Bundling (\d+)%/i))) return { pct: +m[1], label: "Empaquetando " + m[1] + "%" };
+  if ((m = line.match(/\((\d+)\/(\d+)\)/))) return { pct: (+m[1] / +m[2]) * 100, label: "Procesando " + m[1] + "/" + m[2] };
+  if (/Downloaded (\d+) of (\d+)/i.test(line) || /Descargando/i.test(line)) return { pct: -1, label: "Descargando…" };
+  return null;
+}
+
+function setRunning(on, label) {
+  running = on;
+  document.querySelectorAll("button[data-cmd]").forEach((b) => (b.disabled = on));
+  $("#runbar").classList.toggle("on", on);
+  if (on) {
+    $("#runlabel").textContent = label || "Corriendo…";
+    $("#fill").style.width = "0%";
+    t0 = Date.now();
+    clearInterval(timer);
+    timer = setInterval(() => ($("#runtime").textContent = Math.round((Date.now() - t0) / 1000) + "s"), 500);
+  } else {
+    clearInterval(timer);
+  }
+}
+
+function run(cmd, label) {
+  if (running) return;
+  const project = $("#project").value;
+  setRunning(true, label);
+  log("\n$ " + cmd + (project ? " (" + project + ")" : ""), "cmd");
+  const es = new EventSource("/api/run?cmd=" + cmd + "&project=" + encodeURIComponent(project));
+  es.onmessage = (e) => {
+    log(e.data);
+    const p = parseProgress(e.data);
+    if (p) { $("#runlabel").textContent = p.label; if (p.pct >= 0) $("#fill").style.width = p.pct.toFixed(1) + "%"; }
+  };
+  es.addEventListener("done", (e) => {
+    log("— terminado (código " + e.data + ") —", "done");
+    es.close(); setRunning(false); refresh(); loadHealth();
+    toast(e.data === "0" ? "✅ Listo: " + cmd : "⚠️ Terminó con código " + e.data);
+  });
+  es.onerror = () => { es.close(); setRunning(false); };
+}
+
+document.querySelectorAll("button[data-cmd]").forEach((b) => b.addEventListener("click", () => run(b.dataset.cmd, b.textContent.trim())));
+
+async function stopCmd() { await fetch("/api/stop"); toast("⏹ Deteniendo…"); }
+
+async function studio() {
+  log("\nAbriendo Remotion Studio… (~30s, se abre en http://localhost:3000)", "done");
+  toast("🎛 Studio arrancando…");
+  await fetch("/api/studio");
+  setTimeout(() => window.open("http://localhost:3000", "_blank"), 4500);
+}
+
+async function openF(what) { await fetch("/api/open?what=" + what + "&project=" + encodeURIComponent($("#project").value)); toast("📁 Abriendo carpeta…"); }
+
+async function loadHealth() {
+  try {
+    const h = await (await fetch("/api/health")).json();
+    $("#health").innerHTML =
+      '<span class="chip ' + (h.groq ? "ok" : "no") + '">' + (h.groq ? "✓" : "✗") + " Groq API</span>" +
+      '<span class="chip">🖼 ' + h.images + " imágenes procesadas</span>" +
+      '<span class="chip">⚡ ' + h.cache + " en caché</span>";
+  } catch {}
+}
+
+async function refresh() {
+  const st = await (await fetch("/api/state")).json();
+  const sel = $("#project");
+  const cur = sel.value;
+  sel.innerHTML = "";
+  st.projects.forEach((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.title; sel.appendChild(o); });
+  if (cur) sel.value = cur;
+  const p = st.projects.find((x) => x.id === sel.value) || st.projects[0];
+  $("#pinfo").textContent = p ? p.blocks + " bloques · " + (p.look || "sin look") + " · " + (p.captions ? "subs on" : "subs off") : "";
+
+  const vids = $("#videos");
+  vids.innerHTML = "";
+  if (!st.videos.length) vids.innerHTML = '<span class="status">Aún no hay videos. Renderiza arriba.</span>';
+  st.videos.forEach((v) => {
+    const isVert = /short|-v\b|vertical/i.test(v.name);
+    const d = document.createElement("div");
+    d.className = "vid";
+    d.innerHTML =
+      '<video controls preload="metadata" src="/out/' + encodeURIComponent(v.name) + '"></video>' +
+      '<div class="meta"><span class="name">' + (isVert ? "📱" : "🖥") + " " + v.name + " · " + v.size + "</span>" +
+      '<a class="btn" href="/out/' + encodeURIComponent(v.name) + '" download><button class="tiny">⬇</button></a>' +
+      '<button class="tiny" onclick="reveal(\'' + v.name + '\')">📂</button></div>';
+    vids.appendChild(d);
+  });
+}
+async function reveal(name) { await fetch("/api/reveal?file=" + encodeURIComponent(name)); toast("📂 Mostrando en Finder…"); }
+
+$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; });
+
+async function viewTs() {
+  const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
+  const view = $("#tsview");
+  if (!r.ok) { toast("No hay timestamps. Corre ⏱ Timestamps primero."); return; }
+  tsCache = await r.text();
+  view.textContent = tsCache;
+  view.style.display = view.style.display === "none" || !view.style.display ? "block" : "none";
+}
+async function copyPrompt() {
+  if (!tsCache) {
+    const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
+    if (!r.ok) { toast("No hay timestamps. Corre ⏱ Timestamps primero."); return; }
+    tsCache = await r.text();
+  }
+  const prompt =
+    "Tienes estos timestamps de la narración (escena · inicio · fin · texto):\n\n" + tsCache +
+    "\n\nY estas imágenes por capítulo, EN ORDEN (nómbralas cap1-01.png, cap2-01.png, etc.).\n" +
+    "Agrupa las escenas consecutivas en las imágenes disponibles (cada imagen cubre 1+ escenas seguidas) y devuélveme SOLO un JSON así:\n" +
+    '{ "cap1": [ {"file":"cap1-01.png","start":0.0,"end":8.6}, ... ], "cap2": [ ... ] }\n' +
+    "En orden, cubriendo todo el audio de cada capítulo sin huecos ni solapes.";
+  try { await navigator.clipboard.writeText(prompt); toast("📋 Prompt copiado al portapapeles"); }
+  catch { toast("No pude copiar (permiso del navegador)"); }
+}
+
+async function loadConfig() { $("#config").value = await (await fetch("/api/config")).text(); $("#cfgmsg").textContent = ""; }
+function formatConfig() {
+  try { $("#config").value = JSON.stringify(JSON.parse($("#config").value), null, 2); $("#cfgmsg").textContent = "✨ formateado"; }
+  catch (e) { $("#cfgmsg").textContent = "❌ JSON inválido: " + e.message; }
+}
+async function saveConfig() {
+  const r = await fetch("/api/config", { method: "POST", body: $("#config").value });
+  const j = await r.json();
+  $("#cfgmsg").textContent = j.ok ? "✅ guardado" : "❌ " + j.error;
+  if (j.ok) { refresh(); toast("💾 Config guardada"); }
+  setTimeout(() => ($("#cfgmsg").textContent = ""), 4000);
+}
+
+// ---- Constructor de escenas (drag & drop) ----
+let sbChapters = [], sbAssign = {}, sbImages = [];
+async function loadBuilder() {
+  const project = $("#project").value;
+  const ts = await (await fetch("/api/timestamps-json?project=" + project)).json();
+  sbChapters = ts.chapters || [];
+  const sel = $("#sbBlock");
+  sel.innerHTML = "";
+  sbChapters.forEach((c) => { const o = document.createElement("option"); o.value = c.block; o.textContent = c.block + " · " + c.scenes.length + " escenas"; sel.appendChild(o); });
+  const im = await (await fetch("/api/images?project=" + project)).json();
+  sbImages = im.images || [];
+  renderTray();
+  renderBuilder();
+}
+function sbFmt(s) { const m = Math.floor(s / 60); const ss = (s % 60).toFixed(1).padStart(4, "0"); return m + ":" + ss; }
+function renderTray() {
+  const project = $("#project").value;
+  const tray = $("#tray"); tray.innerHTML = "";
+  sbImages.forEach((f) => {
+    const wrap = document.createElement("div"); wrap.className = "thumb";
+    const img = document.createElement("img");
+    img.src = "/img/" + project + "/" + encodeURIComponent(f);
+    img.draggable = true; img.dataset.file = f; img.title = f;
+    img.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", f));
+    wrap.appendChild(img);
+    const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = f.replace(/\.png$/i, "");
+    wrap.appendChild(lbl);
+    tray.appendChild(wrap);
+  });
+  markUsed();
+}
+function renderBuilder() {
+  sbAssign = {};
+  const ch = sbChapters.find((c) => c.block === $("#sbBlock").value);
+  const scenes = $("#scenes"); scenes.innerHTML = "";
+  if (!ch) { scenes.innerHTML = '<span class="status">Sin escenas para este capítulo. Corre ⏱ Timestamps.</span>'; return; }
+  ch.scenes.forEach((sc, i) => {
+    const row = document.createElement("div"); row.className = "scene";
+    row.innerHTML = '<span class="time">' + sbFmt(sc.start) + '–' + sbFmt(sc.end) + '</span><span class="txt">' + sc.text + '</span><div class="slot" data-i="' + i + '">+</div>';
+    row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
+    row.addEventListener("dragleave", () => row.classList.remove("over"));
+    row.addEventListener("drop", (e) => { e.preventDefault(); row.classList.remove("over"); sbAssign[i] = e.dataTransfer.getData("text/plain"); renderSlots(); });
+    row.querySelector(".slot").addEventListener("click", () => { delete sbAssign[i]; renderSlots(); });
+    scenes.appendChild(row);
+  });
+  renderSlots();
+}
+function renderSlots() {
+  const project = $("#project").value;
+  document.querySelectorAll("#scenes .slot").forEach((s) => {
+    const f = sbAssign[s.dataset.i];
+    s.innerHTML = f ? '<img src="/img/' + project + '/' + encodeURIComponent(f) + '">' : '+';
+  });
+  markUsed(); buildJson(true);
+}
+function markUsed() {
+  const used = new Set(Object.values(sbAssign));
+  document.querySelectorAll("#tray img").forEach((img) => img.classList.toggle("used", used.has(img.dataset.file)));
+}
+function autoAssign() {
+  const ch = sbChapters.find((c) => c.block === $("#sbBlock").value);
+  if (!ch) return;
+  sbAssign = {};
+  sbImages.forEach((f, k) => { if (k < ch.scenes.length) sbAssign[k] = f; });
+  renderSlots();
+}
+function buildJson(silent) {
+  const ch = sbChapters.find((c) => c.block === $("#sbBlock").value);
+  if (!ch) return [];
+  const idxs = Object.keys(sbAssign).map(Number).sort((a, b) => a - b);
+  const blockEnd = ch.scenes[ch.scenes.length - 1].end;
+  const imgs = idxs.map((idx, k) => ({
+    file: sbAssign[idx],
+    start: +(k === 0 ? 0 : ch.scenes[idx].start).toFixed(2),
+    end: +(k < idxs.length - 1 ? ch.scenes[idxs[k + 1]].start : blockEnd).toFixed(2),
+  }));
+  if (!silent) $("#sbmsg").textContent = imgs.length ? JSON.stringify(imgs) : "Asigna al menos una imagen.";
+  else $("#sbmsg").textContent = imgs.length ? imgs.length + " imágenes asignadas en " + $("#sbBlock").value : "";
+  return imgs;
+}
+async function applyScenes() {
+  const imgs = buildJson();
+  if (!imgs.length) { toast("Asigna al menos una imagen"); return; }
+  const r = await fetch("/api/apply-scenes", { method: "POST", body: JSON.stringify({ project: $("#project").value, block: $("#sbBlock").value, images: imgs }) });
+  const j = await r.json();
+  if (j.ok) { toast("✅ Escenas aplicadas a " + $("#sbBlock").value); loadConfig(); refresh(); $("#sbmsg").textContent = "✅ Aplicado (" + imgs.length + " imgs). Ahora dale 🧩 Manifest y 🎬 Render."; }
+  else { $("#sbmsg").textContent = "❌ " + j.error; }
+}
+$("#sbBlock").addEventListener("change", renderBuilder);
+
+refresh(); loadConfig(); loadHealth();
+</script>
+</body>
+</html>
