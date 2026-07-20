@@ -1,11 +1,5 @@
 {
-  "_ayuda": "Flujo AUDIO-FIRST: 1) deja los mp3 en ../proyectos/moises/audio/  2) 'npm run timestamps' te da los tiempos por escena  3) generas las imágenes -> ../proyectos/moises/imagenes/  4) llenas 'blocks' abajo  5) 'npm run build && npm run render'. Cada 'block' = una tanda (un audio + sus imágenes). Los subtítulos salen del audio con 'npm run transcribe:cloud'.",
-  "_ejemplo_block": {
-    "id": "cap1",
-    "audio": "../proyectos/moises/audio/cap1.mp3",
-    "images": ["cap1-01.png", "cap1-02.png", { "file": "cap1-03.png", "duration": 5 }]
-  },
-  "_ejemplo_card": { "id": "intro", "card": "MOISÉS", "subtitle": "una historia", "seconds": 2 },
+  "_doc": "Config del pipeline. Formato de bloques, tandas, cards y hooks: ver FORMATO.md y HOOKS.md. Valida con 'npm run check'.",
   "projects": [
     {
       "id": "moises",

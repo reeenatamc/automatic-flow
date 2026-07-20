@@ -1,7 +1,10 @@
 # 📖 FORMATO — Cómo funciona y cómo se corre
 
 Guía completa del pipeline faceless: qué hace, cómo pasar una **tanda**, cómo
-correrlo y cómo saca los **clips** y **clips de gancho**. Sin CapCut.
+correrlo y cómo saca los **clips** y los **hooks**. Sin CapCut. En Windows, macOS o Linux.
+
+> ¿Prefieres botones? Corre `npm run ui` y maneja todo desde el navegador.
+> Esta guía es la referencia de fondo (config, comandos, cómo funciona por dentro).
 
 ---
 
@@ -10,7 +13,7 @@ correrlo y cómo saca los **clips** y **clips de gancho**. Sin CapCut.
 Tú das **grupos de imágenes + un audio de narración** (una "tanda") y el sistema:
 mejora las imágenes con IA → las monta con zoom/paneo y transiciones → las
 sincroniza a la narración → y te **bota** el video completo y los clips (horizontal
-+ Shorts verticales), incluidos **clips de gancho** con las mejores partes.
++ Shorts verticales), incluidos **hooks** con las mejores partes.
 
 ---
 
@@ -21,36 +24,52 @@ sincroniza a la narración → y te **bota** el video completo y los clips (hori
 ┌──────────────┐   enhance    ┌───────────────┐   render    ┌────────────────────┐
 │ imágenes IA  │ ───────────► │ upscale 4x IA │ ──────────► │ video completo H+V │
 │ + narración  │              │ Ken Burns     │             │ clip por tanda (V) │
-│ (una tanda)  │   manifest   │ crossfades    │             │ clips de gancho (V)│
+│ (una tanda)  │   manifest   │ crossfades    │             │ hooks (V)          │
 └──────────────┘ ───────────► │ sincronizado  │             └────────────────────┘
      config                   └───────────────┘                    out/*.mp4
 ```
 
-Tres comandos:
+Cuatro comandos:
 
 | Paso | Comando | Qué hace |
 |------|---------|----------|
-| 1 | `npm run build` | Mejora las imágenes (IA) **y** calcula los tiempos (manifest) |
-| 2 | `npm run studio` | *(opcional)* Previsualiza y ajusta en el navegador |
-| 3 | `npm run render` | Saca **todo**: video completo + clips + clips de gancho |
+| 1 | `npm run check` | Valida tu config (archivos, tiempos, hooks) — atrapa errores antes de gastar tiempo |
+| 2 | `npm run build` | Mejora las imágenes (IA) + subtítulos **y** calcula los tiempos (manifest) |
+| 3 | `npm run studio` | *(opcional)* Previsualiza y ajusta en el navegador |
+| 4 | `npm run render` | Saca **todo**: video completo + clips + hooks |
+
+`build` corre `check` solo al inicio, así que un config roto no llega al render.
 
 ---
 
 ## 3. Estructura de carpetas
 
 ```
-FACELESS CHANNEL/
-├── faceless danny/            ← TUS ORIGINALES (imágenes de ChatGPT + narración)
-│   ├── ChatGPT Image ... (3..8).png
-│   └── ElevenLabs_....mp3
-└── faceless-pipeline/         ← EL PROYECTO
-    ├── projects.config.json   ← 👈 AQUÍ describes tus videos/tandas
-    ├── scripts/               ← automatizaciones (enhance, manifest, render)
-    ├── src/                   ← el "edit" en Remotion (Ken Burns, crossfades…)
-    ├── public/projects/<id>/  ← imágenes mejoradas + audio (lo que usa el video)
-    ├── out/                   ← 🎬 los MP4 finales salen aquí
-    └── bin/                   ← binarios (Real-ESRGAN, etc.)
+automatic-flow/
+├── proyectos/                     ← TUS FUENTES (lo que tú pones)
+│   └── moises/
+│       ├── audio/                 ← tus narraciones: cap1.mp3, cap2.mp3…
+│       ├── imagenes/              ← tus imágenes IA: cap1-01.png, cap1-02.png…
+│       ├── guion.txt              ← (opcional) el texto de la narración
+│       └── produccion.md          ← (opcional) tu plan de edición humano
+└── faceless-pipeline/             ← EL PROYECTO (código)
+    ├── projects.config.json       ← 👈 AQUÍ describes tus videos/tandas
+    ├── scripts/                   ← automatizaciones (check, enhance, manifest, render)
+    ├── src/                       ← el "edit" en Remotion (Ken Burns, crossfades…)
+    ├── out/                       ← 🎬 los MP4 finales (GENERADO)
+    ├── public/projects/<id>/      ← imágenes mejoradas + audio (GENERADO)
+    ├── data/                      ← subtítulos, timestamps, audio masterizado (GENERADO)
+    └── bin/                       ← binarios: Real-ESRGAN, etc. (DESCARGADO)
 ```
+
+> **Convención de nombres:** las carpetas que **tú tocas** están en español
+> (`proyectos`, `imagenes`, `audio`, `guion`); lo que **genera el sistema** o es
+> código está en inglés (`public`, `images`, `data`, `out`, `src`) porque es el
+> estándar de Node/Remotion. Regla simple: **español = tuyo, inglés = generado.**
+>
+> **Nunca edites** `out/`, `public/`, `data/` ni `bin/`: se regeneran solos y por
+> eso están fuera de git (ver `.gitignore`). Lo único irremplazable son tus
+> fuentes en `proyectos/`.
 
 ---
 
@@ -59,135 +78,220 @@ FACELESS CHANNEL/
 Una **tanda** = un grupo de imágenes + **un** audio de narración. En el config es
 un **`block`**. Para agregarla:
 
-1. Deja las imágenes + el `.mp3` en una carpeta (ej. `../faceless danny`).
+1. Deja el `.mp3` en `../proyectos/<id>/audio/` y las imágenes en `../proyectos/<id>/imagenes/`.
 2. Agrega un `block` al proyecto en `projects.config.json`:
 
 ```jsonc
 {
-  "id": "block2",                                  // id único de la tanda
-  "audio": "../faceless danny/narracion2.mp3",     // el audio de esta tanda
-  "images": [                                       // las imágenes, EN ORDEN
-    "img_a.png",
-    "img_b.png",
-    { "file": "img_c.png", "duration": 6 }          // (opcional) 6s fijos
+  "id": "cap3",                                    // id único de la tanda
+  "audio": "../proyectos/moises/audio/cap3.mp3",   // el audio de esta tanda
+  "images": [                                       // las imágenes, EN ORDEN, con su tiempo
+    { "file": "cap3-01.png", "start": 0.0,  "end": 5.2 },
+    { "file": "cap3-02.png", "start": 5.2,  "end": 9.8 },
+    { "file": "cap3-03.png", "start": 9.8,  "end": 14.0 }
   ]
 }
 ```
 
-3. Corre `npm run build && npm run render`.
+3. Corre `npm run check && npm run build && npm run render`.
 
 > 💡 También puedes solo decirme *"aquí va la siguiente tanda"* y yo agrego el
 > bloque, escalo las imágenes y renderizo.
 
-Cada tanda **saca su propio clip vertical automáticamente** (`danny-clip-block2-short.mp4`),
+Cada tanda **saca su propio clip vertical automáticamente** (`moises-clip-cap3-short.mp4`),
 y todas las tandas juntas forman el **video completo**.
 
 ---
 
-## 5. El config a fondo (`projects.config.json`)
+## 5. Sincronización imagen → tiempo
+
+Hay dos formas de decirle a cada imagen cuándo aparece. Puedes elegir por bloque.
+
+### A) Cronometrado (recomendado, preciso) — `start` / `end`
+
+Cada imagen trae su segundo exacto. **La imagen se posiciona en su `start` absoluto**,
+así un ajuste en una imagen NO desincroniza las demás.
+
+```jsonc
+{ "file": "cap1-01.png", "start": 0.0, "end": 6.0 }
+```
+
+- `start` / `end` en segundos (copiados de los timestamps).
+- Las imágenes van **en orden** y deberían **cubrir todo el audio del capítulo**.
+- Si la última imagen no llega al final del audio, se estira para cuadrar (y `check` te avisa).
+
+### B) Reparto parejo (cero trabajo, menos preciso)
+
+Sin tiempos: pon las imágenes como texto y el audio se reparte por igual.
+
+```jsonc
+"images": ["cap1-01.png", "cap1-02.png", { "file": "cap1-03.png", "duration": 5 }]
+```
+
+- Texto `"img.png"` → automática (se reparte parejo).
+- `{ "file": "img.png", "duration": 5 }` → 5s fijos; el resto se reparte entre las automáticas.
+
+> ⚠️ Dentro de un mismo bloque usa **una** forma: `start`/`end` en TODAS las imágenes,
+> o ninguna. `check` te avisa si las mezclas.
+
+### ¿De dónde saco los tiempos? (el "diccionario" escena → tiempo)
+
+`npm run timestamps` mide tu audio y te da los tiempos por escena en
+`data/timestamps/moises.md`. Con esos tiempos generas/ordenas tus imágenes.
+
+Si quieres que una IA te agrupe las escenas en tus imágenes, pégale esto:
+
+> Tienes los timestamps de una narración (escena · inicio · fin · texto):
+> ```
+> [PEGA el contenido de data/timestamps/moises.md]
+> ```
+> Y estas imágenes por capítulo, EN ORDEN: cap1-01.png … cap1-08.png.
+> Agrupa las escenas consecutivas en las imágenes disponibles y devuélveme SOLO un
+> JSON `[{"file":"cap1-01.png","start":0.0,"end":8.6}, ...]` que cubra todo el audio
+> del capítulo SIN huecos ni solapes.
+
+Ese JSON son las `images` del bloque. También puedes decirme *"reparte parejo"* y yo
+distribuyo por igual (forma B).
+
+---
+
+## 6. El config a fondo (`projects.config.json`)
 
 ```jsonc
 {
   "projects": [
     {
-      "id": "danny",                  // nombre corto sin espacios (define los archivos de salida)
-      "title": "Danny",
-      "fps": 30,                        // 30 recomendado (24/60 también sirven)
-      "captions": true,                // subtítulos en verticales desde el guion (ver §10)
-      "sourceImagesDir": "../faceless danny",   // carpeta de las imágenes originales
-      "blocks": [ /* tus tandas — ver sección 4 */ ],
-      "hooks": [ /* clips de gancho — ver sección 6 */ ]
+      "id": "moises",                 // nombre corto sin espacios (define los archivos de salida)
+      "title": "Moisés",
+      "fps": 30,                       // 30 recomendado (24/60 también sirven)
+      "captions": true,                // subtítulos en los VERTICALES (los horizontales van limpios)
+      "look": "filmic",                // grade cinematográfico (color + grano + viñeta suave)
+      "masterAudio": true,             // normaliza la voz si hay data/mastered/<id>__<block>.mp3
+      "music": null,                   // música de fondo (ver §11)
+      "sourceImagesDir": "../proyectos/moises/imagenes",
+      "blocks": [ /* tus tandas — ver §4 y §5 */ ],
+      "hooks":  [ /* clips de gancho — ver HOOKS.md */ ]
     }
   ]
 }
 ```
 
-### Sincronización: manual + automático (en la misma tanda)
-
-- **Automático (parejo):** imagen como texto `"img.png"` → el audio del bloque se
-  reparte por igual entre las imágenes automáticas.
-  *Ej: audio 21s con 6 imágenes = 3.5s cada una.*
-- **Manual:** imagen como `{ "file": "img.png", "duration": 6 }` → esos 6s son fijos.
-  El tiempo restante se reparte entre las automáticas.
-- Puedes **mezclar** ambas en el mismo bloque.
+- `captionMaxChars`: (opcional) largo máximo de línea de subtítulo (por defecto 28).
 
 ---
 
-## 6. Clips de gancho (las "mejores partes")
+## 7. Clips de gancho (hooks)
 
-Un **hook** es un clip corto (Short) armado con los mejores bloques, para enganchar
-y mandar tráfico al video largo. Se definen en `hooks`:
+Un **hook** es un clip corto vertical con el mejor momento, para enganchar y mandar
+tráfico al video largo. Se definen en `hooks` y pueden ser una **ventana de tiempo**
+dentro de un bloque:
 
 ```jsonc
 "hooks": [
-  { "id": "intro",  "label": "Gancho de apertura", "blocks": ["block1"] },
-  { "id": "climax", "label": "Momento clave",       "blocks": ["block4", "block5"] }
+  { "id": "apertura", "label": "Cold-open", "block": "cap1", "start": 0.0, "end": 13.5 }
 ]
 ```
 
-- `blocks` = qué tandas entran al gancho (se pegan una tras otra, aunque no sean seguidas).
-- Cada hook sale como `danny-hook-<id>-short.mp4`.
-- **¿Cómo elijo las mejores partes?** Ahora es manual (tú eliges los bloques). Cuando
-  haya varias tandas, dime *"sácame los ganchos"* y yo reviso el contenido y propongo
-  los `hooks` (apertura, giro, momento clave) por ti.
+Recorta audio + imágenes + subtítulos a esa ventana y los re-sincroniza solo.
+La **estrategia** (qué momentos elegir para retención/monetización) y todo el detalle
+están en **[`HOOKS.md`](./HOOKS.md)**.
 
 ---
 
-## 7. Todos los comandos
+## 8. Separadores / tarjetas de capítulo
+
+Un **cuadro negro con texto** es un bloque tipo **`card`**. Úsalo de intro o entre tandas:
+
+```jsonc
+"blocks": [
+  { "id": "titulo", "card": "MOISÉS", "subtitle": "una historia", "seconds": 2 },
+  { "id": "cap1",   "audio": "...", "images": [ "..." ] },
+  { "id": "sep2",   "card": "YEARS EARLIER", "seconds": 1.5, "sfx": "sparkle" }
+]
+```
+
+- `card` = texto grande · `subtitle` = línea secundaria (opcional) · `seconds` = duración.
+- `sfx` (opcional) = un efecto de sonido de `assets/sfx/` al entrar.
+- Hace fade-in/out solo, no lleva audio ni subtítulos. Estilo: `src/components/TitleCard.tsx`.
+
+---
+
+## 9. Todos los comandos
 
 ```bash
-# --- preparar ---
-npm run build        # enhance (mejora imágenes IA) + manifest (tiempos)
-npm run enhance      # solo mejorar imágenes
+# --- validar y preparar ---
+npm run check        # valida el config (no cambia nada)
+npm run build        # check + enhance (imágenes IA) + captions + manifest (tiempos)
+npm run enhance      # solo mejorar imágenes   ( -- --force  para rehacer)
 npm run manifest     # solo recalcular tiempos
+npm run timestamps   # tiempos por escena de tu audio → data/timestamps/<id>.md
+npm run transcribe:cloud   # subtítulos del audio con Whisper en la nube (Groq, gratis)
 
 # --- previsualizar ---
-npm run studio       # abre Remotion Studio en el navegador
+npm run ui           # interfaz web con botones (localhost:4599)
+npm run studio       # Remotion Studio (previsualiza cada composición)
 
 # --- renderizar ---
-npm run render         # TODO: video completo + clips + ganchos   ← el "une todo"
-npm run render:full    # solo el video completo (horizontal + vertical)
-npm run render:clips   # solo un clip por cada tanda (vertical)
-npm run render:hooks   # solo los clips de gancho (vertical)
+npm run render         # TODO: completo + clips + hooks
+npm run render:full    # solo el video completo (H + V)
+npm run render:clips   # solo un clip por cada tanda (V)
+npm run render:hooks   # solo los hooks (V)
 npm run render:list    # lista qué renderizaría, sin renderizar (dry run)
 ```
 
 Filtros extra (directo al script):
 
 ```bash
-node scripts/render.mjs --project=danny   # limita a un proyecto
-node scripts/render.mjs --clips --both    # clips también en horizontal
-node scripts/render.mjs --hooks --h       # ganchos solo horizontal
+node scripts/render.mjs --project=moises   # limita a un proyecto
+node scripts/render.mjs --clips --both     # clips también en horizontal
 ```
 
 ---
 
-## 8. Qué sale (archivos en `out/`)
+## 10. Subtítulos
 
-| Archivo | Qué es | Formato |
-|---------|--------|---------|
-| `danny-full-1080p.mp4` | Video completo (todas las tandas) | 1920×1080 |
-| `danny-full-short.mp4` | Video completo vertical | 1080×1920 |
-| `danny-clip-block1-short.mp4` | Clip de una tanda | 1080×1920 |
-| `danny-hook-intro-short.mp4` | Clip de gancho | 1080×1920 |
+Los subtítulos salen **solo en los verticales/Shorts** (los horizontales van limpios).
+Hay dos formas de generarlos:
 
-En **Remotion Studio** cada uno aparece como una composición: `danny-full-h`,
-`danny-full-v`, `danny-clip-block1-v`, `danny-hook-intro-v`, etc.
+| Método | Comando | De dónde | Necesita |
+|--------|---------|----------|----------|
+| **Whisper nube** (recomendado) | `npm run transcribe:cloud` | del audio, palabra x palabra (karaoke) | key gratis de Groq |
+| **Desde el guion** | `npm run captions` | de tu texto `.txt` | `scriptFile` o `script` en el bloque |
+
+**Whisper en la nube (Groq, gratis):**
+1. Saca una key en https://console.groq.com/keys
+2. Copia `.env.example` a `.env` y pega `GROQ_API_KEY=gsk_...`
+3. Con `"captions": true`, corre `npm run transcribe:cloud && npm run manifest` y re-renderiza.
+
+Estilo (tamaño, color, contorno, posición): `src/components/Captions.tsx`.
 
 ---
 
-## 9. Cómo funciona por dentro
+## 11. Música de fondo
 
-- **"Quitar la IA" / upscale** (`scripts/enhance-images.mjs`): copia cada imagen y la
-  escala 4× con **Real-ESRGAN** (IA que agrega detalle real), normalizada a 3840px.
-  Respaldo automático a `sips` si el binario falla. Idempotente (no repite lo hecho;
-  `--force` para rehacer). Salen a `public/projects/<id>/images/`.
-- **Tiempos** (`scripts/build-manifest.mjs`): mide cada narración con `afinfo` y
-  reparte los frames por imagen (auto/manual). Escribe `src/manifest.json`.
-- **El "edit"** (`src/`): en Remotion, cada imagen lleva **Ken Burns** (zoom + paneo,
-  alternando por orden) y **crossfade** de 0.5s con la siguiente. El vertical usa
-  fondo difuminado + imagen centrada.
-- **Segmentos** (`src/lib/segment.ts`): el video completo, un clip o un gancho son el
+Remotion no trae música: tú pones el archivo y él lo mezcla (loop, por debajo de la
+voz, con fade-in/out).
+
+1. Baja un track y déjalo en `assets/music/`.
+2. En el proyecto: `"music": "assets/music/mi-track.mp3"`, `"musicVolume": 0.14` (0..1).
+3. `npm run manifest && npm run render`.
+
+Fuentes gratis (licencia comercial): Pixabay, Mixkit, Freesound (CC0). Ver `assets/README.md`.
+
+---
+
+## 12. Cómo funciona por dentro
+
+- **Upscale** (`scripts/enhance-images.mjs`): escala cada imagen 4× con **Real-ESRGAN**
+  (IA), la normaliza a 3840px, borra metadatos de origen y aplica el look `filmic`
+  (grade + grano + viñeta suave). Idempotente (`--force` para rehacer). El binario se
+  descarga según tu SO. Salen a `public/projects/<id>/images/`.
+- **Tiempos** (`scripts/build-manifest.mjs`): mide cada narración (con
+  `@remotion/media-parser`, JS puro) y posiciona cada imagen en su `start` absoluto.
+  Escribe `src/manifest.json`.
+- **El "edit"** (`src/`): cada imagen lleva **Ken Burns** (zoom + paneo alternado) y
+  **crossfade** de 0.5s. El vertical usa fondo difuminado + imagen centrada.
+- **Segmentos** (`src/lib/segment.ts`): el video completo, un clip o un hook son el
   mismo componente con distinto subconjunto de bloques, re-basado a empezar en 0.
 
 ### Ajustes rápidos
@@ -196,104 +300,20 @@ En **Remotion Studio** cada uno aparece como una composición: `danny-full-h`,
 |---------|-------|
 | Más/menos zoom o paneo | `src/components/KenBurns.tsx` → `ZOOM`, `PAN`, `OVERSCAN` |
 | Crossfade más largo/corto | `src/Video.tsx` → `cross` (0.5s por defecto) |
+| Filtro más claro/oscuro | `scripts/enhance-images.mjs` → sección `filmic` |
 | Otra resolución de upscale | `scripts/enhance-images.mjs` → `MAX_WIDTH` |
-| Cambiar duración de una imagen | `duration` en el config (sección 5) |
 
 ---
-
-## 10. Subtítulos (desde tu guion, SIN IA) ✅
-
-Los subtítulos se generan del **guion** —el texto que escribiste para la narración—
-**sin correr IA, sin internet y sin costo**. Se reparten sobre la duración del audio
-(la voz TTS va a ritmo parejo, así que sincroniza bien) y se pintan en los verticales/Shorts.
-
-**Cómo activarlos por bloque:**
-
-1. Pon `"captions": true` en el proyecto.
-2. En cada bloque, dale el texto de la narración de una de estas dos formas:
-   - `"scriptFile": "../carpeta/narracion-block1.txt"` ← archivo `.txt` (recomendado)
-   - o `"script": "texto de la narración..."` ← inline
-3. Corre `npm run captions && npm run manifest` (o simplemente `npm run build`).
-4. Renderiza. Los subtítulos salen **solos** en los verticales.
-
-**Importante:** el texto debe ser el MISMO que le diste a ElevenLabs. Si cambias el
-guion, vuelve a correr `npm run captions && npm run manifest`.
-
-**Ajustes:**
-
-| Quiero… | Dónde |
-|---------|-------|
-| Líneas más cortas/largas | `"captionMaxChars": 28` en el proyecto (config) |
-| Tamaño, color, contorno, posición | `src/components/Captions.tsx` |
-
-### Alternativa: subtítulos automáticos DEL AUDIO (nube, sin guion)
-
-Si no quieres pegar el guion, puedes sacar los subtítulos **directo del audio** con
-timestamps por palabra, usando Whisper en la **nube** (la IA corre en servidores, tu
-Mac no hace nada). Groq es **gratis**.
-
-1. Saca una key gratis en https://console.groq.com/keys
-2. Copia `.env.example` a `.env` y pega: `GROQ_API_KEY=gsk_...`
-3. Con `"captions": true` en el proyecto, corre:
-   ```bash
-   npm run transcribe:cloud    # transcribe el audio en la nube → subtítulos
-   npm run manifest            # los incrusta
-   npm run render:hooks        # (o render) re-renderiza con subs
-   ```
-
-Resumen de métodos de subtítulos:
-
-| Método | Comando | Del audio | Corre en tu Mac | Necesita |
-|--------|---------|-----------|-----------------|----------|
-| **Desde el guion** | `npm run captions` | ❌ usa tu texto | ✅ instantáneo | el `.txt` |
-| **Whisper nube** | `npm run transcribe:cloud` | ✅ palabra x palabra | ❌ (nube) | key gratis Groq |
-| Whisper local | `npm run transcribe` | ✅ | ⚠️ no rinde aquí | — |
-
----
-
-## 11. Música de fondo
-
-Remotion **no trae música** (ni catálogo): tú pones el archivo y él lo mezcla. Suena
-en loop por debajo de la narración, con fade-in/out automático.
-
-1. Baja un track (ver fuentes abajo) y déjalo en `assets/music/`.
-2. En el proyecto (config):
-   ```json
-   "music": "assets/music/mi-track.mp3",
-   "musicVolume": 0.14
-   ```
-   `musicVolume` es 0..1 (por defecto 0.14 — bajito para no tapar la voz).
-3. `npm run manifest && npm run render`.
-
-**Fuentes gratis (licencia comercial):** Pixabay y Mixkit (sin atribución), Freesound
-(SFX, filtra por CC0), YouTube Audio Library. Ver `assets/README.md`.
-
-## 12. Separadores / tarjetas de capítulo
-
-Un **cuadro negro con texto** es un bloque tipo **`card`** en tu timeline. Úsalo de
-intro o entre tandas:
-
-```json
-"blocks": [
-  { "id": "titulo", "card": "LA DECISIÓN", "subtitle": "una historia", "seconds": 2 },
-  { "id": "block1", "audio": "...", "images": [ "..." ] },
-  { "id": "sep2",   "card": "Capítulo 2", "seconds": 1.5 },
-  { "id": "block2", "audio": "...", "images": [ "..." ] }
-]
-```
-
-- `card` = texto grande · `subtitle` = línea secundaria (opcional) · `seconds` = duración.
-- Hace fade-in/out solo, no lleva audio ni subtítulos, y ocupa su tiempo en el video.
-- Estilo (tamaño, color): `src/components/TitleCard.tsx`.
 
 ## 13. Problemas comunes
 
 | Síntoma | Solución |
 |---------|----------|
-| El upscale no agrega detalle | Real-ESRGAN falló → usó `sips`. Borra `bin/realesrgan*` y re-corre `npm run enhance` |
-| Cambié el orden de imágenes y no se refleja | `npm run enhance -- --force` (re-mapea posiciones) |
-| El render se ve lento | Normal en Mac Intel (~1-2 min por video 1080p de 20s) |
+| Cambié de máquina y no arranca | `rm -rf node_modules && npm install` (binarios por SO) |
+| `check` marca huecos o solapes | Revisa los `start`/`end` del bloque que menciona |
 | No aparece una composición nueva | Corre `npm run manifest` (regenera la lista) |
+| Cambié el orden de imágenes | `npm run enhance -- --force` (re-mapea posiciones) |
+| El render se ve lento | Normal en equipos sin GPU potente (~1-2 min por video de 20s) |
 
 ---
 

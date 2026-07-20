@@ -12,7 +12,7 @@
  *   node scripts/render.mjs --full          # solo el video completo
  *   node scripts/render.mjs --clips         # solo los clips por tanda
  *   node scripts/render.mjs --hooks         # solo los clips de gancho
- *   node scripts/render.mjs --project=danny # limita a un proyecto
+ *   node scripts/render.mjs --project=moises # limita a un proyecto
  *   node scripts/render.mjs --both          # clips/ganchos tambien en horizontal
  *   node scripts/render.mjs --h | --v       # fuerza solo horizontal / vertical
  *   node scripts/render.mjs --list          # solo lista lo que haria (dry run)

@@ -8,7 +8,7 @@
  *
  * Requiere GROQ_API_KEY (o OPENAI_API_KEY) en faceless-pipeline/.env
  *
- * Uso:  node scripts/timestamps-md.mjs [--project=danny]
+ * Uso:  node scripts/timestamps-md.mjs [--project=moises]
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
