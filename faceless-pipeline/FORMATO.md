@@ -299,6 +299,15 @@ intro o entre tandas:
 
 ## 14. Requisitos
 
-- **Node 18+** y **npm** (ya instalados).
-- **macOS** (usa `sips` y `afinfo` nativos). No necesita `ffmpeg` (Remotion trae el suyo).
+- **Node 18+** y **npm**.
+- **Windows, macOS o Linux.** No hace falta `ffmpeg` (Remotion trae el suyo) ni
+  ninguna herramienta del sistema: la duración de los audios se lee con
+  `@remotion/media-parser` (JavaScript puro).
 - Primera vez: se descarga Real-ESRGAN (~30 MB) y un Chrome headless (~150 MB).
+
+> ⚠️ **Al cambiar de máquina (ej. Mac → Windows), reinstala las dependencias:**
+> ```bash
+> rm -rf node_modules && npm install
+> ```
+> `sharp`, `esbuild` y el compositor de Remotion traen binarios distintos por
+> sistema operativo. Un `node_modules` copiado de otra máquina no funciona.

@@ -14,7 +14,7 @@
  *
  * Uso:  node scripts/enhance-images.mjs [--force] [--filmic]
  */
-import { readFileSync, mkdirSync, existsSync, copyFileSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSync } from "node:fs";
 import { execFileSync, execSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +24,17 @@ const ROOT = resolve(__dirname, "..");
 const CONFIG = join(ROOT, "projects.config.json");
 const PUBLIC = join(ROOT, "public");
 const BIN_DIR = join(ROOT, "bin");
-const REAL_ESRGAN = join(BIN_DIR, "realesrgan-ncnn-vulkan");
+
+// Real-ESRGAN se distribuye como un binario por sistema operativo.
+const IS_WIN = process.platform === "win32";
+const IS_MAC = process.platform === "darwin";
+const REAL_ESRGAN = join(BIN_DIR, IS_WIN ? "realesrgan-ncnn-vulkan.exe" : "realesrgan-ncnn-vulkan");
+const ESRGAN_ZIP_URL = (() => {
+  const base = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424";
+  if (IS_WIN) return `${base}-windows.zip`;
+  if (IS_MAC) return `${base}-macos.zip`;
+  return `${base}-ubuntu.zip`;
+})();
 const MODEL = "realesrgan-x4plus";
 const MAX_WIDTH = 3840;
 const FORCE = process.argv.includes("--force");
@@ -38,18 +48,38 @@ const pad = (n) => String(n).padStart(2, "0");
 let sharp = null;
 try { sharp = (await import("sharp")).default; } catch {}
 
-function ensureUpscaler() {
+// Descomprime un .zip sin depender de `unzip` (que no existe en Windows).
+function unzipTo(zipAbs, destDir) {
+  if (IS_WIN) {
+    execFileSync(
+      "powershell",
+      ["-NoProfile", "-Command", `Expand-Archive -LiteralPath '${zipAbs}' -DestinationPath '${destDir}' -Force`],
+      { stdio: "inherit" }
+    );
+  } else {
+    execFileSync("unzip", ["-o", "-q", zipAbs, "-d", destDir], { stdio: "inherit" });
+  }
+}
+
+async function ensureUpscaler() {
   if (existsSync(REAL_ESRGAN)) return true;
   console.log("⬇️  Descargando Real-ESRGAN (solo la primera vez, ~30 MB)...");
   try {
     mkdirSync(BIN_DIR, { recursive: true });
-    const url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip";
     const zip = join(BIN_DIR, "realesrgan.zip");
-    execFileSync("curl", ["-L", "--fail", "--silent", "--show-error", "-o", zip, url], { stdio: "inherit" });
-    execFileSync("unzip", ["-o", "-q", zip, "-d", BIN_DIR], { stdio: "inherit" });
+    // fetch nativo (Node 18+): sin curl, igual en todos los sistemas.
+    const res = await fetch(ESRGAN_ZIP_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status} al bajar ${ESRGAN_ZIP_URL}`);
+    writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
+    unzipTo(zip, BIN_DIR);
     rmSync(zip, { force: true });
-    try { execFileSync("xattr", ["-dr", "com.apple.quarantine", BIN_DIR]); } catch {}
-    try { execFileSync("chmod", ["+x", REAL_ESRGAN]); } catch {}
+    if (IS_MAC) {
+      // macOS pone en cuarentena lo descargado y no lo deja ejecutar.
+      try { execFileSync("xattr", ["-dr", "com.apple.quarantine", BIN_DIR]); } catch {}
+    }
+    if (!IS_WIN) {
+      try { execFileSync("chmod", ["+x", REAL_ESRGAN]); } catch {}
+    }
     return existsSync(REAL_ESRGAN);
   } catch (e) {
     console.warn("⚠️  No pude instalar Real-ESRGAN:", (e.message || "").split("\n")[0]);
@@ -98,14 +128,17 @@ async function finalize(inputAbs, outAbs, filmic) {
   let pipe = sharp(inputAbs, { failOn: "none", limitInputPixels: false });
 
   if (filmic) {
-    // grade: desatura leve + sube brillo + contraste SUAVE (sin crushear sombras)
-    pipe = pipe.modulate({ saturation: 0.92, brightness: 1.05 }).linear(1.05, -3);
+    // grade: desatura leve + sube brillo + LEVANTA las sombras (offset +4, no las
+    // aplasta). Antes usaba linear(1.05,-3) que oscurecia; ahora (1.04,+4) da
+    // contraste suave sin cerrar los negros.
+    pipe = pipe.modulate({ saturation: 0.94, brightness: 1.09 }).linear(1.04, 4);
     const nw = Math.round(w / 2), nh = Math.round(h / 2);
     const grain = await sharp(noiseBuffer(nw, nh), { raw: { width: nw, height: nh, channels: 1 } }).resize(w, h).png().toBuffer();
-    // viñeta más suave (esquinas menos oscuras)
+    // viñeta MUY suave: empieza tarde (72%) y las esquinas caen solo a #e0e0e0
+    // (~12% mas oscuras, antes 22%). Da profundidad de cine sin apagar la imagen.
     const vignette = Buffer.from(
-      `<svg width="${w}" height="${h}"><defs><radialGradient id="v" cx="50%" cy="50%" r="78%">` +
-        `<stop offset="62%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c6c6c6"/></radialGradient></defs>` +
+      `<svg width="${w}" height="${h}"><defs><radialGradient id="v" cx="50%" cy="50%" r="85%">` +
+        `<stop offset="72%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e0e0"/></radialGradient></defs>` +
         `<rect width="100%" height="100%" fill="url(#v)"/></svg>`
     );
     pipe = pipe.composite([
@@ -117,13 +150,19 @@ async function finalize(inputAbs, outAbs, filmic) {
   await pipe.png({ compressionLevel: 9 }).toFile(outAbs); // re-encode => sin metadatos de origen
 }
 
-function sipsFallback(srcAbs, outAbs) {
+// Ultimo recurso si sharp no esta disponible. `sips` solo existe en macOS;
+// en el resto copiamos la imagen tal cual (sin escalar) para no romper el flujo.
+function basicFallback(srcAbs, outAbs) {
   copyFileSync(srcAbs, outAbs);
-  execFileSync("sips", ["-Z", String(MAX_WIDTH), outAbs], { stdio: "ignore" });
+  if (IS_MAC) {
+    execFileSync("sips", ["-Z", String(MAX_WIDTH), outAbs], { stdio: "ignore" });
+  } else {
+    console.warn(`   ⚠️  copiada sin escalar (instala sharp: npm install sharp)`);
+  }
 }
 
 async function processImage(srcAbs, outAbs, filmic, cacheKey) {
-  if (!sharp) { sipsFallback(srcAbs, outAbs); return "sips (sin sharp: sin filmic ni strip)"; }
+  if (!sharp) { basicFallback(srcAbs, outAbs); return "básico (sin sharp: sin filmic ni strip)"; }
   let normalized, how;
   if (useReal) {
     const r = await upscaleToCache(srcAbs, cacheKey);
@@ -146,8 +185,8 @@ async function processImage(srcAbs, outAbs, filmic, cacheKey) {
 
 // ---- main ----
 const config = JSON.parse(readFileSync(CONFIG, "utf8"));
-const useReal = ensureUpscaler();
-console.log(useReal ? "✨ Upscale con Real-ESRGAN (IA)." : sharp ? "↩️  Sin Real-ESRGAN: escalo con sharp (lanczos)." : "↩️  Sin sharp ni IA: sips básico.");
+const useReal = await ensureUpscaler();
+console.log(useReal ? "✨ Upscale con Real-ESRGAN (IA)." : sharp ? "↩️  Sin Real-ESRGAN: escalo con sharp (lanczos)." : "↩️  Sin sharp ni IA: escalado básico del sistema.");
 if (!sharp) console.warn("⚠️  sharp no está instalado: no habrá re-encode/strip ni filmic. Corre: npm install sharp");
 
 let total = 0;
@@ -182,7 +221,7 @@ for (const project of config.projects) {
         console.log(how);
       } catch (e) {
         console.log("falló → " + (e.message || "").split("\n")[0]);
-        try { sipsFallback(srcAbs, outAbs); console.log(`${tag}    ↳ ok (sips)`); } catch {}
+        try { basicFallback(srcAbs, outAbs); console.log(`${tag}    ↳ ok (fallback)`); } catch {}
       }
     }
   }

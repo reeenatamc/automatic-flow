@@ -34,7 +34,7 @@ export const Video: React.FC<VideoProps> = ({ projectId, format, segment }) => {
       {/* Narración (solo bloques media) */}
       {mediaBlocks.map((b) => (
         <Sequence key={`audio-${b.id}`} from={b.localStartFrame} durationInFrames={b.audioDurationInFrames}>
-          {b.audio ? <Audio src={staticFile(b.audio)} /> : null}
+          {b.audio ? <Audio src={staticFile(b.audio)} startFrom={b.audioStartFromFrame ?? 0} /> : null}
         </Sequence>
       ))}
 

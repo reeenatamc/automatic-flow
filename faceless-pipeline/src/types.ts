@@ -28,6 +28,7 @@ export interface BlockManifest {
   audioDurationInFrames: number; // duracion del bloque en frames (audio para media, duracion para card)
   // --- media ---
   audio?: string; // ruta dentro de public/
+  audioStartFromFrame?: number; // recorta el audio: empieza a reproducir desde este frame (para hooks con ventana)
   images?: ImageManifest[];
   captions?: CaptionCue[]; // subtitulos (relativos al bloque)
   // --- card (separador) ---
@@ -40,7 +41,7 @@ export interface BlockManifest {
 export interface HookDef {
   id: string;
   label: string;
-  blocks: string[]; // ids de bloques que forman el clip de gancho
+  segment: string[]; // ids de bloques (reales o sinteticos __hook_*) que forman el gancho, ya resueltos
 }
 
 export interface ProjectMusic {
@@ -56,6 +57,7 @@ export interface ProjectManifest {
   captions: boolean; // subtitulos en verticales
   music?: ProjectMusic | null; // musica de fondo (opcional)
   blocks: BlockManifest[];
+  hookBlocks?: BlockManifest[]; // bloques sinteticos (recortes) que usan los hooks con ventana; NO entran al video completo ni a los clips
   hooks: HookDef[];
 }
 

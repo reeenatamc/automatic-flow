@@ -12,6 +12,20 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const PORT = 4599;
+
+// --- abrir cosas del sistema, multiplataforma (antes solo `open` de macOS) ---
+// Abre una carpeta, un archivo o una URL con el programa por defecto del sistema.
+function openInSystem(target) {
+  if (process.platform === "win32") return spawn("cmd", ["/c", "start", "", target], { detached: true });
+  if (process.platform === "darwin") return spawn("open", [target], { detached: true });
+  return spawn("xdg-open", [target], { detached: true }); // linux
+}
+// Abre el explorador con el archivo YA SELECCIONADO (resaltado).
+function revealInSystem(file) {
+  if (process.platform === "win32") return spawn("explorer", [`/select,${file}`], { detached: true });
+  if (process.platform === "darwin") return spawn("open", ["-R", file], { detached: true });
+  return spawn("xdg-open", [dirname(file)], { detached: true }); // linux: no hay "select", abre la carpeta
+}
 const CONFIG = join(ROOT, "projects.config.json");
 const HTML = join(__dirname, "ui.html");
 const OUT = join(ROOT, "out");
@@ -118,12 +132,13 @@ const server = createServer((req, res) => {
     if (what === "audio") target = resolve(ROOT, `../proyectos/${project}/audio`);
     else if (what === "imagenes") target = resolve(ROOT, `../proyectos/${project}/imagenes`);
     else if (what === "timestamps") target = join(ROOT, "data", "timestamps");
-    spawn("open", [target]);
+    openInSystem(target);
     return json(res, { ok: true });
   }
 
   if (path === "/api/studio") {
-    const child = spawn("npx", ["remotion", "studio", "src/index.ts"], { cwd: ROOT, detached: true, stdio: "ignore" });
+    // shell:true → en Windows resuelve npx.cmd; en unix usa /bin/sh. Sin esto, ENOENT en Windows.
+    const child = spawn("npx remotion studio src/index.ts", { cwd: ROOT, detached: true, stdio: "ignore", shell: true });
     child.unref();
     return json(res, { ok: true, url: "http://localhost:3000" });
   }
@@ -140,7 +155,9 @@ const server = createServer((req, res) => {
     if (project && (cmdKey.startsWith("render") || cmdKey === "timestamps")) cmd += ` --project=${project}`;
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
     res.write(`data: $ ${cmd}\n\n`);
-    const child = spawn("sh", ["-c", cmd], { cwd: ROOT, detached: true });
+    // shell:true corre el string tal cual: cmd.exe en Windows (soporta &&), sh en unix.
+    // Antes era spawn("sh", ...) que no existe en Windows.
+    const child = spawn(cmd, { cwd: ROOT, shell: true });
     currentChild = child;
     const send = (buf) =>
       buf
@@ -163,7 +180,12 @@ const server = createServer((req, res) => {
 
   if (path === "/api/stop") {
     if (currentChild) {
-      try { process.kill(-currentChild.pid, "SIGTERM"); } catch { try { currentChild.kill("SIGTERM"); } catch {} }
+      if (process.platform === "win32") {
+        // mata el arbol completo (cmd + node + chrome del render)
+        try { spawn("taskkill", ["/pid", String(currentChild.pid), "/T", "/F"]); } catch {}
+      } else {
+        try { process.kill(-currentChild.pid, "SIGTERM"); } catch { try { currentChild.kill("SIGTERM"); } catch {} }
+      }
     }
     return json(res, { ok: true });
   }
@@ -183,7 +205,7 @@ const server = createServer((req, res) => {
 
   if (path === "/api/reveal") {
     const file = join(OUT, url.searchParams.get("file") || "");
-    if (file.startsWith(OUT) && existsSync(file)) spawn("open", ["-R", file]);
+    if (file.startsWith(OUT) && existsSync(file)) revealInSystem(file);
     return json(res, { ok: true });
   }
 
@@ -273,5 +295,5 @@ const server = createServer((req, res) => {
 server.listen(PORT, () => {
   const u = `http://localhost:${PORT}`;
   console.log(`\n🎬 Faceless Pipeline UI → ${u}\n   (Ctrl+C para cerrar)\n`);
-  spawn("open", [u]);
+  openInSystem(u);
 });

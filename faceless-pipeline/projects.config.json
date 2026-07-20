@@ -59,7 +59,11 @@
           ]
         }
       ],
-      "hooks": []
+      "hooks": [
+        { "id": "apertura",    "label": "Cold-open · las apuestas", "block": "cap1", "start": 0.0,  "end": 13.5 },
+        { "id": "cliffhanger", "label": "Curiosity gap · el bebé",  "block": "cap1", "start": 39.5, "end": 49.0 },
+        { "id": "decreto",     "label": "El giro · el decreto",     "block": "cap2", "start": 50.5, "end": 68.5 }
+      ]
     }
   ]
 }

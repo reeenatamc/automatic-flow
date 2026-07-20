@@ -10,8 +10,13 @@ export function resolveSegment(
   project: ProjectManifest,
   blockIds: string[] | null
 ): { blocks: RebasedBlock[]; durationInFrames: number } {
+  // los hooks con ventana referencian bloques sinteticos (__hook_*) que viven en
+  // project.hookBlocks, aparte de los bloques reales. Buscamos en ambos.
+  const findBlock = (id: string) =>
+    project.blocks.find((b) => b.id === id) ?? project.hookBlocks?.find((b) => b.id === id);
+
   const selected = blockIds
-    ? blockIds.map((id) => project.blocks.find((b) => b.id === id)).filter((b): b is NonNullable<typeof b> => Boolean(b))
+    ? blockIds.map(findBlock).filter((b): b is NonNullable<typeof b> => Boolean(b))
     : project.blocks;
 
   let cursor = 0;

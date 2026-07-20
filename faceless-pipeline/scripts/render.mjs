@@ -21,6 +21,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -75,8 +76,23 @@ console.log(`🎬 ${jobs.length} render(s):`);
 for (const j of jobs) console.log(`   • ${j.compId}  →  ${j.out}`);
 if (dryRun) process.exit(0);
 
+// Llamamos al CLI de Remotion con node directamente, en vez de por `npx`.
+// En Windows `npx` es `npx.cmd` y execFileSync no lo resuelve (ENOENT); asi
+// funciona igual en Windows, macOS y Linux, y ademas arranca mas rapido.
+// El bin sale del package.json de @remotion/cli (su ruta no esta en "exports",
+// pero package.json si), para no clavar el nombre del archivo.
+const REMOTION_CLI = (() => {
+  const req = createRequire(import.meta.url);
+  const pkgPath = req.resolve("@remotion/cli/package.json");
+  const bin = JSON.parse(readFileSync(pkgPath, "utf8")).bin.remotion;
+  return join(dirname(pkgPath), bin);
+})();
+
 for (const [i, j] of jobs.entries()) {
   console.log(`\n──────── [${i + 1}/${jobs.length}] ${j.compId} ────────`);
-  execFileSync("npx", ["remotion", "render", "src/index.ts", j.compId, j.out], { stdio: "inherit", cwd: ROOT });
+  execFileSync(process.execPath, [REMOTION_CLI, "render", "src/index.ts", j.compId, j.out], {
+    stdio: "inherit",
+    cwd: ROOT,
+  });
 }
 console.log(`\n✅ Listo. ${jobs.length} video(s) en out/`);

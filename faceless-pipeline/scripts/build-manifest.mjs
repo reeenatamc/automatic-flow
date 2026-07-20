@@ -108,9 +108,46 @@ for (const project of config.projects) {
       continue;
     }
 
-    // frames fijos (manual: duration, o start/end) vs automaticos
+    const blockStart = cursor;
+    const srcFor = (im) => `projects/${project.id}/images/${im.file}`;
+    let framesArr;
+
+    // ── MODO CRONOMETRADO: cada imagen trae `start` (timeline de SCENE-FORMAT) ──
+    // Se posiciona cada imagen en su `start` ABSOLUTO. La duracion de una imagen
+    // es "hasta que arranca la siguiente" (la ultima, hasta el fin del audio).
+    // Asi un hueco o solape NO desincroniza lo que sigue: cada imagen cae en su
+    // segundo exacto. (El bug anterior encadenaba end-start y el error se sumaba.)
+    if (imgs.every((im) => im.start != null)) {
+      const startF = imgs.map((im) => Math.round(im.start * fps));
+      framesArr = startF.map((s, i) => {
+        const nextS = i < startF.length - 1 ? startF[i + 1] : blockFrames;
+        return Math.max(1, nextS - s);
+      });
+      const images = imgs.map((im, i) => ({
+        src: srcFor(im),
+        file: im.file,
+        startFrame: blockStart + startF[i],
+        durationInFrames: framesArr[i],
+      }));
+      // avisos utiles (no fatales)
+      const lastEnd = imgs[imgs.length - 1].end;
+      if (startF[0] > 1) console.warn(`   ⚠️  ${block.id}: la 1a imagen arranca en ${imgs[0].start}s (hay negro antes)`);
+      if (lastEnd != null && Math.abs(lastEnd * fps - blockFrames) > fps * 0.4)
+        console.warn(`   ⚠️  ${block.id}: las imagenes cubren ${lastEnd}s pero el audio dura ${(blockFrames / fps).toFixed(1)}s (la ultima se estira/recorta para cuadrar)`);
+
+      cursor = blockStart + blockFrames;
+      blocks.push({
+        id: block.id, kind: "media", audio: audioPublicRel, startFrame: blockStart,
+        audioDurationInFrames: blockFrames, images,
+        captions: project.captions ? loadCaptions(project.id, block.id, fps) : undefined,
+        sfx: resolveSfx(project.id, block),
+      });
+      continue;
+    }
+
+    // ── MODO AUTO/DURACION: sin `start` → reparte parejo (+ `duration` fijos) ──
     const manual = imgs.map((im) => {
-      const dur = im.duration != null ? im.duration : im.start != null && im.end != null ? im.end - im.start : null;
+      const dur = im.duration != null ? im.duration : null;
       return dur != null && dur > 0 ? Math.max(1, Math.round(dur * fps)) : null;
     });
     const autoCount = manual.filter((f) => f === null).length;
@@ -119,17 +156,16 @@ for (const project of config.projects) {
     if (autoCount > 0 && remaining < autoCount) remaining = autoCount; // cada auto >= 1 frame
     const perAuto = autoCount > 0 ? Math.floor(remaining / autoCount) : 0;
 
-    const framesArr = manual.map((f) => (f === null ? perAuto : f));
+    framesArr = manual.map((f) => (f === null ? perAuto : f));
     // ajustar redondeo: la ultima imagen absorbe la diferencia para cuadrar exacto con el audio
     const sum = framesArr.reduce((a, b) => a + b, 0);
     framesArr[framesArr.length - 1] = Math.max(1, framesArr[framesArr.length - 1] + (blockFrames - sum));
 
-    const blockStart = cursor;
     const images = imgs.map((im, i) => {
       const start = cursor;
       cursor += framesArr[i];
       return {
-        src: `projects/${project.id}/images/${im.file}`,
+        src: srcFor(im),
         file: im.file,
         startFrame: start,
         durationInFrames: framesArr[i],
@@ -164,15 +200,75 @@ for (const project of config.projects) {
     }
   }
 
-  // valida hooks: cada gancho debe referenciar bloques existentes
-  const blockIds = new Set(blocks.map((b) => b.id));
-  const hooks = (project.hooks ?? []).map((h) => {
-    const valid = (h.blocks ?? []).filter((id) => blockIds.has(id));
-    if (valid.length !== (h.blocks ?? []).length) {
-      console.warn(`⚠️  hook '${h.id}' referencia bloques inexistentes; uso ${JSON.stringify(valid)}`);
+  // ── HOOKS (clips de gancho) ──────────────────────────────────────────────
+  // Dos formas:
+  //   A) BLOQUES ENTEROS:  { "id", "label", "blocks": ["cap1", ...] }
+  //   B) VENTANA DE TIEMPO: { "id", "label", "block": "cap1", "start": 0, "end": 13.5 }
+  //      → recorta audio + imágenes + subtítulos a esa ventana (un bloque sintético).
+  const blockById = new Map(blocks.map((b) => [b.id, b]));
+  const hookBlocks = [];
+  const hooks = [];
+
+  for (const h of project.hooks ?? []) {
+    // ---- B) ventana de tiempo ----
+    if (h.block != null && (h.start != null || h.end != null)) {
+      const sb = blockById.get(h.block);
+      if (!sb || sb.kind !== "media") { console.warn(`⚠️  hook '${h.id}': el bloque '${h.block}' no existe o no es de media.`); continue; }
+      const startF = Math.max(0, Math.round((h.start ?? 0) * fps));
+      const endF = Math.min(sb.audioDurationInFrames, Math.round((h.end ?? sb.audioDurationInFrames / fps) * fps));
+      const winLen = endF - startF;
+      if (winLen < fps * 0.5) { console.warn(`⚠️  hook '${h.id}': ventana muy corta (${(winLen / fps).toFixed(1)}s), la salto.`); continue; }
+
+      const synthId = `__hook_${h.id}`;
+      // imágenes que caen dentro de la ventana, recortadas y re-basadas a 0
+      const imgs = (sb.images ?? [])
+        .map((im) => {
+          const localStart = im.startFrame - sb.startFrame; // relativo al bloque original
+          const localEnd = localStart + im.durationInFrames;
+          const from = Math.max(localStart, startF);
+          const to = Math.min(localEnd, endF);
+          if (to <= from) return null; // no solapa la ventana
+          return { ...im, startFrame: from - startF, durationInFrames: to - from }; // re-basado al hook
+        })
+        .filter(Boolean);
+      // subtítulos dentro de la ventana, re-basados Y CLAMPEADOS a [0, winLen].
+      // Una frase que arranca antes de la ventana se recorta para empezar en 0
+      // (si no, saldría con frame negativo y el karaoke se descuadra).
+      const caps = (sb.captions ?? [])
+        .map((c) => {
+          const cStart = c.startFrame, cEnd = c.startFrame + c.durationInFrames;
+          if (cEnd <= startF || cStart >= endF) return null;
+          const ns = Math.max(0, cStart - startF);
+          const nEnd = Math.min(cEnd - startF, winLen);
+          if (nEnd - ns <= 0) return null;
+          const words = (c.words ?? [])
+            .map((w) => ({ ...w, startFrame: Math.max(0, w.startFrame - startF) }))
+            .filter((w) => w.startFrame < winLen);
+          return { ...c, startFrame: ns, durationInFrames: nEnd - ns, words: words.length ? words : undefined };
+        })
+        .filter(Boolean);
+
+      hookBlocks.push({
+        id: synthId,
+        kind: "media",
+        startFrame: 0,
+        audio: sb.audio,
+        audioStartFromFrame: startF, // el audio arranca en este frame del original
+        audioDurationInFrames: winLen,
+        images: imgs,
+        captions: caps.length ? caps : undefined,
+      });
+      hooks.push({ id: h.id, label: h.label ?? h.id, segment: [synthId] });
+      continue;
     }
-    return { id: h.id, label: h.label ?? h.id, blocks: valid };
-  }).filter((h) => h.blocks.length > 0);
+
+    // ---- A) bloques enteros ----
+    const valid = (h.blocks ?? []).filter((id) => blockById.has(id));
+    if (valid.length !== (h.blocks ?? []).length)
+      console.warn(`⚠️  hook '${h.id}' referencia bloques inexistentes; uso ${JSON.stringify(valid)}`);
+    if (valid.length === 0) { console.warn(`⚠️  hook '${h.id}' sin bloques válidos, lo salto.`); continue; }
+    hooks.push({ id: h.id, label: h.label ?? h.id, segment: valid });
+  }
 
   manifest.projects[project.id] = {
     id: project.id,
@@ -182,6 +278,7 @@ for (const project of config.projects) {
     music,
     totalFrames: Math.max(1, cursor),
     blocks,
+    hookBlocks,
     hooks,
   };
 }
@@ -201,5 +298,8 @@ for (const p of Object.values(manifest.projects)) {
     const cap = b.captions ? ` · ${b.captions.length} subtítulos` : p.captions ? " · (sin transcribir aún)" : "";
     console.log(`     └ ${b.id}: ${(b.images ?? []).length} imgs [${secs}]${cap}`);
   }
-  if (p.hooks.length) console.log(`     ⚓ ganchos: ${p.hooks.map((h) => `${h.id}(${h.blocks.join("+")})`).join(", ")}`);
+  if (p.hooks.length) {
+    const dur = (seg) => seg.reduce((a, id) => a + (([...p.blocks, ...(p.hookBlocks ?? [])].find((b) => b.id === id)?.audioDurationInFrames ?? 0)), 0);
+    console.log(`     ⚓ ganchos: ${p.hooks.map((h) => `${h.id} (${(dur(h.segment) / p.fps).toFixed(0)}s)`).join(", ")}`);
+  }
 }

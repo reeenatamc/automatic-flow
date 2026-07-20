@@ -4,6 +4,7 @@
   "private": true,
   "description": "Pipeline automatizado para canal faceless: mejora de imagenes (upscale IA) + montaje de video con Remotion (Ken Burns, crossfades, sincronizado a narracion).",
   "scripts": {
+    "check": "node scripts/check.mjs",
     "enhance": "node scripts/enhance-images.mjs",
     "captions": "node scripts/captions-from-script.mjs",
     "transcribe:cloud": "node scripts/transcribe-cloud.mjs",
@@ -12,7 +13,7 @@
     "manifest": "node scripts/build-manifest.mjs",
     "master": "node scripts/master-audio.mjs",
     "sfx": "node scripts/generate-sfx.mjs",
-    "build": "node scripts/enhance-images.mjs && node scripts/captions-from-script.mjs && node scripts/build-manifest.mjs",
+    "build": "node scripts/check.mjs && node scripts/enhance-images.mjs && node scripts/captions-from-script.mjs && node scripts/build-manifest.mjs",
     "studio": "remotion studio src/index.ts",
     "ui": "node scripts/ui-server.mjs",
     "render": "node scripts/render.mjs",

@@ -27,7 +27,7 @@ export const RemotionRoot: React.FC = () => {
   for (const project of Object.values(manifest.projects)) {
     const specs: Spec[] = [{ id: `${project.id}-full`, segment: null }];
     for (const block of project.blocks) specs.push({ id: `${project.id}-clip-${block.id}`, segment: [block.id] });
-    for (const hook of project.hooks ?? []) specs.push({ id: `${project.id}-hook-${hook.id}`, segment: hook.blocks });
+    for (const hook of project.hooks ?? []) specs.push({ id: `${project.id}-hook-${hook.id}`, segment: hook.segment });
 
     for (const spec of specs) {
       for (const fmt of FORMATS) {
