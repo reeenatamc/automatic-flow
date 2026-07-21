@@ -160,7 +160,21 @@
       <select id="project"></select>
       <span id="pinfo" class="chip"></span>
       <span style="flex:1"></span>
+      <button onclick="toggleNewProject()" class="tiny"><svg class="ic"><use href="#i-plus"></use></svg> Nuevo proyecto</button>
       <button onclick="refresh()" class="tiny"><svg class="ic"><use href="#i-refresh"></use></svg> Actualizar</button>
+    </div>
+    <div id="newProject" class="card" style="display:none; margin-top:10px">
+      <div class="bar">
+        <input id="npId" class="num" style="width:130px" placeholder="id (sin espacios)">
+        <input id="npTitle" class="num" style="width:160px" placeholder="título">
+        <span class="status">fps</span><input id="npFps" class="num" style="width:64px" type="number" value="30">
+        <span class="status">look</span><select id="npLook"></select>
+        <label class="status" style="display:inline-flex;align-items:center;gap:5px"><input id="npCaptions" type="checkbox" checked> subtítulos</label>
+        <span style="flex:1"></span>
+        <button class="go" onclick="createProject()"><svg class="ic"><use href="#i-check"></use></svg> Crear</button>
+        <button class="tiny" onclick="toggleNewProject()"><svg class="ic"><use href="#i-x"></use></svg></button>
+      </div>
+      <div class="status" style="margin-top:8px">Crea el proyecto y las carpetas <b>proyectos/&lt;id&gt;/audio</b> e <b>/imagenes</b>. Luego sube tus audios ahí.</div>
     </div>
 
     <h3>1 · Validar</h3>
@@ -237,6 +251,8 @@
     </div>
 
     <h3><svg class="ic"><use href="#i-message"></use></svg> Audios del proyecto
+      <button class="tiny" onclick="document.getElementById('audioUp').click()"><svg class="ic"><use href="#i-download"></use></svg> Subir audios</button>
+      <input type="file" id="audioUp" accept="audio/*,.mp3,.wav,.m4a" multiple hidden>
       <button class="tiny" onclick="loadAudios()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button>
       <button class="tiny" onclick="run('master','Masterizar audio')"><svg class="ic"><use href="#i-sliders"></use></svg> Masterizar + limpiar todos</button>
     </h3>
@@ -251,6 +267,8 @@
         Capítulo: <select id="sbBlock"></select>
         <button class="tiny" onclick="loadBuilder()">↻ Cargar escenas</button>
         <span style="flex:1"></span>
+        <button class="tiny" onclick="document.getElementById('imageUp').click()"><svg class="ic"><use href="#i-download"></use></svg> Subir imágenes</button>
+        <input type="file" id="imageUp" accept="image/png,image/jpeg" multiple hidden>
         <button class="tiny" onclick="autoAssign()"><svg class="ic"><use href="#i-sparkles"></use></svg> Auto-asignar en orden</button>
         <button class="go" onclick="applyScenes()"><svg class="ic"><use href="#i-check"></use></svg> Aplicar al config</button>
       </div>
@@ -611,6 +629,52 @@ async function applyScenes() {
 }
 $("#sbBlock").addEventListener("change", renderBuilder);
 
+// ---- Subir archivos (audios / imágenes) ----
+async function uploadFiles(files, kind) {
+  if (!files || !files.length) return;
+  const project = $("#project").value;
+  let ok = 0;
+  toast("Subiendo " + files.length + " archivo(s)…");
+  for (const f of files) {
+    try {
+      const buf = await f.arrayBuffer();
+      const r = await fetch("/api/upload?project=" + encodeURIComponent(project) + "&kind=" + kind + "&name=" + encodeURIComponent(f.name), { method: "POST", body: buf });
+      if ((await r.json()).ok) ok++;
+    } catch {}
+  }
+  toast(ok + "/" + files.length + " subido(s)");
+  if (kind === "audio") loadAudios();
+  else { toast("Imágenes subidas — corre Mejorar imágenes para procesarlas"); }
+}
+document.addEventListener("DOMContentLoaded", () => {});
+// (los listeners se enganchan al final, tras definir todo)
+
+// ---- Nuevo proyecto ----
+function toggleNewProject() {
+  const el = $("#newProject");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") {
+    const sel = $("#npLook"); sel.innerHTML = "";
+    (looksData.length ? looksData : [{ id: "filmic", label: "Filmic" }]).forEach((l) => { const o = document.createElement("option"); o.value = l.id; o.textContent = l.label; sel.appendChild(o); });
+    sel.value = "filmic"; $("#npId").focus();
+  }
+}
+async function createProject() {
+  const payload = {
+    id: $("#npId").value, title: $("#npTitle").value, fps: +$("#npFps").value,
+    look: $("#npLook").value, captions: $("#npCaptions").checked,
+  };
+  const r = await fetch("/api/create-project", { method: "POST", body: JSON.stringify(payload) });
+  const j = await r.json();
+  if (!j.ok) { toast(j.error || "No se pudo crear"); return; }
+  toast("Proyecto '" + j.id + "' creado");
+  $("#npId").value = ""; $("#npTitle").value = "";
+  toggleNewProject();
+  await refresh();
+  $("#project").value = j.id;
+  $("#project").dispatchEvent(new Event("change"));
+}
+
 // ---- Look / presets de imagen ----
 let looksData = [];
 async function loadLooks() {
@@ -784,6 +848,8 @@ $("#hkBlock").addEventListener("change", () => { $("#hkEnd").value = 0; renderHk
 $("#hkStart").addEventListener("input", updateHkPreview);
 $("#hkEnd").addEventListener("input", updateHkPreview);
 
+$("#audioUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "audio"); e.target.value = ""; });
+$("#imageUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "image"); e.target.value = ""; });
 loadLooks(); refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion();
 </script>
 </body>

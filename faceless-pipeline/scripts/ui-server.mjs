@@ -4,7 +4,7 @@
  * Corre: npm run ui   (abre http://localhost:4599)
  */
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, join, resolve, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -425,6 +425,62 @@ const server = createServer(async (req, res) => {
       });
     }
     return json(res, { audios: out });
+  }
+
+  // subir un archivo (audio o imagen) a las carpetas de fuentes del proyecto.
+  // El cuerpo es el binario crudo; el nombre/tipo van por query.
+  if (path === "/api/upload") {
+    const project = (url.searchParams.get("project") || "").replace(/[^\w-]/g, "");
+    const kind = url.searchParams.get("kind"); // "audio" | "image"
+    const name = basename(url.searchParams.get("name") || "");
+    const okExt = kind === "audio" ? /\.(mp3|wav|m4a|aac)$/i : /\.(png|jpe?g)$/i;
+    if (!project || !name || !okExt.test(name)) return json(res, { ok: false, error: "nombre o tipo no válido" }, 400);
+    const destDir = resolve(ROOT, `../proyectos/${project}/${kind === "audio" ? "audio" : "imagenes"}`);
+    mkdirSync(destDir, { recursive: true });
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      try { writeFileSync(join(destDir, name), Buffer.concat(chunks)); json(res, { ok: true, name }); }
+      catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
+  // crear un proyecto nuevo: lo agrega al config y crea sus carpetas de fuentes
+  if (path === "/api/create-project") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { id, title, fps, look, captions } = JSON.parse(body);
+        const pid = (id || "").trim().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
+        if (!pid) return json(res, { ok: false, error: "ponle un id (sin espacios)" }, 400);
+        const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+        if ((cfg.projects || []).some((p) => p.id === pid)) return json(res, { ok: false, error: "ya existe un proyecto con ese id" }, 400);
+        // carpetas de fuentes + LEEME
+        const audioDir = resolve(ROOT, `../proyectos/${pid}/audio`);
+        const imgDir = resolve(ROOT, `../proyectos/${pid}/imagenes`);
+        mkdirSync(audioDir, { recursive: true });
+        mkdirSync(imgDir, { recursive: true });
+        try { writeFileSync(join(audioDir, "LEEME.txt"), "Deja aquí los audios de narración (cap1.mp3, cap2.mp3…).\n"); } catch {}
+        try { writeFileSync(join(imgDir, "LEEME.txt"), "Deja aquí las imágenes por escena (cap1-01.png…).\n"); } catch {}
+        (cfg.projects ??= []).push({
+          id: pid,
+          title: (title || pid).trim(),
+          fps: Number(fps) || 30,
+          captions: captions !== false,
+          look: look || "filmic",
+          masterAudio: true,
+          music: null,
+          sourceImagesDir: `../proyectos/${pid}/imagenes`,
+          blocks: [],
+          hooks: [],
+        });
+        writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+        json(res, { ok: true, id: pid });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
   }
 
   // crear una tanda (bloque de media) a partir de un audio suelto
