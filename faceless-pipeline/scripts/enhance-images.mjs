@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSyn
 import { execFileSync, execSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { applyLook } from "./lib/looks.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -113,40 +114,12 @@ async function upscaleToCache(srcAbs, cacheKey) {
   return { path: cached, fresh: true };
 }
 
-// ruido monocromo suave (grano)
-function noiseBuffer(w, h) {
-  const buf = Buffer.allocUnsafe(w * h);
-  for (let i = 0; i < buf.length; i++) buf[i] = 118 + Math.floor(Math.random() * 20); // ~128 ±10
-  return buf;
-}
-
-// sharp: resize a MAX_WIDTH + (filmic) grade/grano/viñeta + re-encode (borra metadatos)
-async function finalize(inputAbs, outAbs, filmic) {
+// sharp: resize (ya viene normalizado) + look del preset + re-encode (borra metadatos)
+async function finalize(inputAbs, outAbs, look) {
   const meta = await sharp(inputAbs, { failOn: "none", limitInputPixels: false }).metadata();
   const w = meta.width, h = meta.height; // el input ya viene normalizado a MAX_WIDTH
-
   let pipe = sharp(inputAbs, { failOn: "none", limitInputPixels: false });
-
-  if (filmic) {
-    // grade: desatura leve + sube brillo + LEVANTA las sombras (offset +4, no las
-    // aplasta). Antes usaba linear(1.05,-3) que oscurecia; ahora (1.04,+4) da
-    // contraste suave sin cerrar los negros.
-    pipe = pipe.modulate({ saturation: 0.94, brightness: 1.09 }).linear(1.04, 4);
-    const nw = Math.round(w / 2), nh = Math.round(h / 2);
-    const grain = await sharp(noiseBuffer(nw, nh), { raw: { width: nw, height: nh, channels: 1 } }).resize(w, h).png().toBuffer();
-    // viñeta MUY suave: empieza tarde (72%) y las esquinas caen solo a #e0e0e0
-    // (~12% mas oscuras, antes 22%). Da profundidad de cine sin apagar la imagen.
-    const vignette = Buffer.from(
-      `<svg width="${w}" height="${h}"><defs><radialGradient id="v" cx="50%" cy="50%" r="85%">` +
-        `<stop offset="72%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e0e0"/></radialGradient></defs>` +
-        `<rect width="100%" height="100%" fill="url(#v)"/></svg>`
-    );
-    pipe = pipe.composite([
-      { input: grain, blend: "overlay" },
-      { input: vignette, blend: "multiply" },
-    ]);
-  }
-
+  pipe = await applyLook(sharp, pipe, look, w, h); // presets en lib/looks.mjs
   await pipe.png({ compressionLevel: 9 }).toFile(outAbs); // re-encode => sin metadatos de origen
 }
 
@@ -161,8 +134,8 @@ function basicFallback(srcAbs, outAbs) {
   }
 }
 
-async function processImage(srcAbs, outAbs, filmic, cacheKey) {
-  if (!sharp) { basicFallback(srcAbs, outAbs); return "básico (sin sharp: sin filmic ni strip)"; }
+async function processImage(srcAbs, outAbs, look, cacheKey) {
+  if (!sharp) { basicFallback(srcAbs, outAbs); return "básico (sin sharp: sin look ni strip)"; }
   let normalized, how;
   if (useReal) {
     const r = await upscaleToCache(srcAbs, cacheKey);
@@ -179,8 +152,8 @@ async function processImage(srcAbs, outAbs, filmic, cacheKey) {
     }
     how = "sharp";
   }
-  await finalize(normalized, outAbs, filmic);
-  return `${how} + reencode${filmic ? " + filmic" : ""}`;
+  await finalize(normalized, outAbs, look);
+  return `${how} + reencode (${look})`;
 }
 
 // ---- main ----
@@ -197,8 +170,8 @@ for (const project of config.projects) {
   const srcDir = resolve(ROOT, project.sourceImagesDir);
   const outDir = join(PUBLIC, "projects", project.id, "images");
   mkdirSync(outDir, { recursive: true });
-  const filmic = FORCE_FILMIC || project.look === "filmic";
-  if (filmic) console.log(`🎞  ${project.id}: look FILMIC activado (grade + grano + viñeta)`);
+  const look = FORCE_FILMIC ? "filmic" : (project.look || "none");
+  console.log(`🎞  ${project.id}: look = ${look}`);
 
   for (const block of project.blocks) {
     if (block.card !== undefined) continue;
@@ -217,7 +190,7 @@ for (const project of config.projects) {
 
       process.stdout.write(`${tag} 🖼  ${file} → ${basename(outAbs)} ... `);
       try {
-        const how = await processImage(srcAbs, outAbs, filmic, cacheKey);
+        const how = await processImage(srcAbs, outAbs, look, cacheKey);
         console.log(how);
       } catch (e) {
         console.log("falló → " + (e.message || "").split("\n")[0]);

@@ -80,6 +80,14 @@
   #tray img { width: 78px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: grab; display: block; }
   #tray img.used { opacity: 0.28; }
   #tray .lbl { position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: #000a; padding: 1px 5px; border-radius: 3px; color: #fff; }
+  /* look preview */
+  .lookprev { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .lookprev figure { margin: 0; }
+  .lookprev img { border-radius: 8px; border: 1px solid var(--border); display: block; background: #000; }
+  .lookprev .h img { height: 220px; width: auto; max-width: 100%; }
+  .lookprev .v img { height: 300px; width: auto; }
+  .lookprev figcaption { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; }
+  .lookprev .fit { color: var(--green); }
   /* audios */
   .aud { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; background: var(--panel2); }
   .aud .an { font-weight: 600; font-size: 13px; min-width: 120px; }
@@ -204,6 +212,19 @@
       <button class="tiny" onclick="copyPrompt()"><svg class="ic"><use href="#i-clipboard"></use></svg> Copiar prompt para IA</button>
     </h3>
     <div id="tsview"></div>
+
+    <h3><svg class="ic"><use href="#i-image"></use></svg> Look / filtro de imagen</h3>
+    <div class="card">
+      <div class="bar" style="margin-bottom:10px">
+        Preset: <select id="lookSel"></select>
+        <button class="tiny" onclick="previewLook()"><svg class="ic"><use href="#i-eye"></use></svg> Previsualizar</button>
+        <span style="flex:1"></span>
+        <button class="go" onclick="applyLook()"><svg class="ic"><use href="#i-check"></use></svg> Aplicar a TODO el proyecto</button>
+      </div>
+      <div id="lookDesc" class="status" style="margin-bottom:10px"></div>
+      <div id="lookPrev" class="lookprev"><span class="status">Elige un preset y dale "Previsualizar" (necesita imágenes mejoradas).</span></div>
+      <div id="lookmsg" class="status" style="margin-top:8px"></div>
+    </div>
 
     <h3><svg class="ic"><use href="#i-book"></use></svg> Guion completo (texto crudo)
       <button class="tiny" onclick="loadGuion()"><svg class="ic"><use href="#i-refresh"></use></svg> Recargar</button>
@@ -404,6 +425,7 @@ async function refresh() {
   if (cur) sel.value = cur;
   const p = st.projects.find((x) => x.id === sel.value) || st.projects[0];
   $("#pinfo").textContent = p ? p.blocks + " bloques · " + (p.look || "sin look") + " · " + (p.captions ? "subs on" : "subs off") : "";
+  if (p && p.look && $("#lookSel").querySelector('[value="' + p.look + '"]')) { $("#lookSel").value = p.look; showLookDesc(); }
 
   renderVideos(st.videos);
 }
@@ -589,6 +611,41 @@ async function applyScenes() {
 }
 $("#sbBlock").addEventListener("change", renderBuilder);
 
+// ---- Look / presets de imagen ----
+let looksData = [];
+async function loadLooks() {
+  const d = await (await fetch("/api/looks")).json();
+  looksData = d.looks || [];
+  const sel = $("#lookSel"); sel.innerHTML = "";
+  looksData.forEach((l) => { const o = document.createElement("option"); o.value = l.id; o.textContent = l.label; sel.appendChild(o); });
+  showLookDesc();
+}
+function showLookDesc() {
+  const l = looksData.find((x) => x.id === $("#lookSel").value);
+  $("#lookDesc").textContent = l ? l.desc : "";
+}
+async function previewLook() {
+  const look = $("#lookSel").value, project = $("#project").value;
+  $("#lookPrev").innerHTML = '<span class="status">Generando preview…</span>';
+  const d = await (await fetch("/api/preview-look?project=" + encodeURIComponent(project) + "&look=" + look)).json();
+  if (!d.ok) { $("#lookPrev").innerHTML = '<span class="status">' + ic("x") + " " + (d.error || "error") + "</span>"; return; }
+  $("#lookPrev").innerHTML =
+    '<figure class="h"><img src="' + d.original + '"><figcaption>Original</figcaption></figure>' +
+    '<figure class="h"><img src="' + d.graded + '"><figcaption>Con "' + look + '" (horizontal)</figcaption></figure>' +
+    '<figure class="v"><img src="' + d.vertical + '"><figcaption class="fit">' + ic("check") + ' Encaje vertical (Short)</figcaption></figure>';
+}
+async function applyLook() {
+  const look = $("#lookSel").value, project = $("#project").value;
+  if (!confirm('¿Aplicar el look "' + look + '" a TODAS las imágenes de ' + project + '? Reprocesa el proyecto.')) return;
+  const r = await fetch("/api/apply-look", { method: "POST", body: JSON.stringify({ project, look }) });
+  const j = await r.json();
+  if (!j.ok) { $("#lookmsg").innerHTML = ic("x") + " " + j.error; return; }
+  $("#lookmsg").innerHTML = ic("check") + ' Look guardado. Reprocesando imágenes…';
+  loadConfig();
+  run("enhance-force", "Aplicar look (" + look + ")");
+}
+$("#lookSel").addEventListener("change", showLookDesc);
+
 // ---- Guion completo ----
 async function loadGuion() {
   $("#guion").value = await (await fetch("/api/guion?project=" + encodeURIComponent($("#project").value))).text();
@@ -727,7 +784,7 @@ $("#hkBlock").addEventListener("change", () => { $("#hkEnd").value = 0; renderHk
 $("#hkStart").addEventListener("input", updateHkPreview);
 $("#hkEnd").addEventListener("input", updateHkPreview);
 
-refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion();
+loadLooks(); refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion();
 </script>
 </body>
 </html>

@@ -9,6 +9,9 @@ import { spawn } from "node:child_process";
 import { dirname, join, resolve, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { audioDurationSeconds } from "./lib/audio.mjs";
+import { LOOKS, applyLook } from "./lib/looks.mjs";
+let sharp = null;
+try { sharp = (await import("sharp")).default; } catch {}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -310,6 +313,70 @@ const server = createServer(async (req, res) => {
       blocks.push({ id: b.id, duration: Math.round(duration * 10) / 10, cues });
     }
     return json(res, { blocks, hooks: p.hooks || [] });
+  }
+
+  // lista de presets de look disponibles
+  if (path === "/api/looks") {
+    return json(res, { looks: LOOKS.map((l) => ({ id: l.id, label: l.label, desc: l.desc })) });
+  }
+
+  // preview de un look sobre UNA imagen del proyecto: devuelve original + con-look
+  // + un encuadre VERTICAL (para ver que la imagen encaja sin irse de largo).
+  if (path === "/api/preview-look") {
+    const project = url.searchParams.get("project") || "";
+    const look = url.searchParams.get("look") || "filmic";
+    if (!sharp) return json(res, { ok: false, error: "sharp no está instalado" }, 500);
+    // toma la primera imagen del cache de upscale del proyecto (ya reescalada, sin grade)
+    let cacheFile = null;
+    try {
+      const cacheDir = join(ROOT, "bin", "upscale-cache");
+      const hit = readdirSync(cacheDir).filter((f) => f.startsWith(`${project}__`) && f.endsWith(".png")).sort()[0];
+      if (hit) cacheFile = join(cacheDir, hit);
+    } catch {}
+    // respaldo: una imagen ya procesada en public/
+    if (!cacheFile) {
+      try {
+        const imgDir = join(ROOT, "public", "projects", project, "images");
+        const hit = readdirSync(imgDir).filter((f) => /\.png$/i.test(f)).sort()[0];
+        if (hit) cacheFile = join(imgDir, hit);
+      } catch {}
+    }
+    if (!cacheFile) return json(res, { ok: false, error: "no hay imágenes; corre 'Mejorar imágenes' primero" }, 404);
+    try {
+      const PREV_W = 900;
+      const base = await sharp(cacheFile, { failOn: "none", limitInputPixels: false }).resize({ width: PREV_W }).toBuffer();
+      const meta = await sharp(base).metadata();
+      const original = await sharp(base).png().toBuffer();
+      const graded = await (await applyLook(sharp, sharp(base), look, meta.width, meta.height)).png().toBuffer();
+      // encuadre vertical 9:16: fondo difuminado + imagen centrada "contain" (como en el video)
+      const VW = 405, VH = 720;
+      const bg = await sharp(graded).resize({ width: VW, height: VH, fit: "cover" }).blur(28).modulate({ brightness: 0.6 }).toBuffer();
+      const fg = await sharp(graded).resize({ width: VW, height: VH, fit: "inside" }).toBuffer();
+      const fgMeta = await sharp(fg).metadata();
+      const vertical = await sharp(bg)
+        .composite([{ input: fg, left: Math.round((VW - fgMeta.width) / 2), top: Math.round((VH - fgMeta.height) / 2) }])
+        .png().toBuffer();
+      const b64 = (b) => "data:image/png;base64," + b.toString("base64");
+      return json(res, { ok: true, look, original: b64(original), graded: b64(graded), vertical: b64(vertical) });
+    } catch (e) { return json(res, { ok: false, error: e.message }, 500); }
+  }
+
+  // aplicar un look a TODO el proyecto: lo guarda en el config y reprocesa (--force)
+  if (path === "/api/apply-look") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, look } = JSON.parse(body);
+        const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+        const p = (cfg.projects || []).find((x) => x.id === project);
+        if (!p) return json(res, { ok: false, error: "proyecto no encontrado" }, 404);
+        p.look = look;
+        writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+        json(res, { ok: true });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
   }
 
   // guion completo (texto crudo) del proyecto: proyectos/<id>/guion.txt
