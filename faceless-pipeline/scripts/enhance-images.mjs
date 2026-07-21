@@ -14,7 +14,7 @@
  *
  * Uso:  node scripts/enhance-images.mjs [--force] [--filmic]
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSync, readdirSync } from "node:fs";
 import { execFileSync, execSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,41 +162,47 @@ const useReal = await ensureUpscaler();
 console.log(useReal ? "✨ Upscale con Real-ESRGAN (IA)." : sharp ? "↩️  Sin Real-ESRGAN: escalo con sharp (lanczos)." : "↩️  Sin sharp ni IA: escalado básico del sistema.");
 if (!sharp) console.warn("⚠️  sharp no está instalado: no habrá re-encode/strip ni filmic. Corre: npm install sharp");
 
-let total = 0;
-for (const p of config.projects) for (const b of p.blocks) total += b.images?.length ?? 0;
+// Procesa TODAS las imágenes de la carpeta de origen (no solo las que ya están
+// en un bloque), para que aparezcan en el constructor de escenas aunque todavía
+// no las hayas acomodado. La salida siempre es .png.
+const plan = config.projects.map((project) => {
+  const srcDir = resolve(ROOT, project.sourceImagesDir);
+  let files = [];
+  try { files = readdirSync(srcDir).filter((f) => /\.(png|jpe?g)$/i.test(f)).sort(); } catch {}
+  return { project, srcDir, files };
+});
+const total = plan.reduce((a, p) => a + p.files.length, 0);
 let count = 0;
 
-for (const project of config.projects) {
-  const srcDir = resolve(ROOT, project.sourceImagesDir);
+for (const { project, srcDir, files } of plan) {
   const outDir = join(PUBLIC, "projects", project.id, "images");
   mkdirSync(outDir, { recursive: true });
   const look = FORCE_FILMIC ? "filmic" : (project.look || "none");
-  console.log(`🎞  ${project.id}: look = ${look}`);
+  console.log(`🎞  ${project.id}: look = ${look} · ${files.length} imágenes`);
 
-  for (const block of project.blocks) {
-    if (block.card !== undefined) continue;
-    const items = block.images ?? [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const file = typeof item === "string" ? item : item.file;
-      const srcAbs = join(srcDir, file);
-      const outAbs = join(outDir, file);
-      const cacheKey = `${project.id}__${file.replace(/\.[^.]+$/, "")}`;
-      count++;
-      const tag = `(${pad(count)}/${pad(total)})`;
+  for (const file of files) {
+    const srcAbs = join(srcDir, file);
+    const outFile = file.replace(/\.[^.]+$/, ".png"); // normaliza extensión a .png
+    const outAbs = join(outDir, outFile);
+    const cacheKey = `${project.id}__${file.replace(/\.[^.]+$/, "")}`;
+    count++;
+    const tag = `(${pad(count)}/${pad(total)})`;
 
-      if (!existsSync(srcAbs)) { console.warn(`${tag} ⚠️  no existe: ${srcAbs}`); continue; }
-      if (existsSync(outAbs) && !FORCE) { console.log(`${tag} ⏭  ya existe ${basename(outAbs)}`); continue; }
+    if (existsSync(outAbs) && !FORCE) { console.log(`${tag} ⏭  ya existe ${basename(outAbs)}`); continue; }
 
-      process.stdout.write(`${tag} 🖼  ${file} → ${basename(outAbs)} ... `);
-      try {
-        const how = await processImage(srcAbs, outAbs, look, cacheKey);
-        console.log(how);
-      } catch (e) {
-        console.log("falló → " + (e.message || "").split("\n")[0]);
-        try { basicFallback(srcAbs, outAbs); console.log(`${tag}    ↳ ok (fallback)`); } catch {}
-      }
+    process.stdout.write(`${tag} 🖼  ${file} → ${basename(outAbs)} ... `);
+    try {
+      const how = await processImage(srcAbs, outAbs, look, cacheKey);
+      console.log(how);
+    } catch (e) {
+      console.log("falló → " + (e.message || "").split("\n")[0]);
+      try { basicFallback(srcAbs, outAbs); console.log(`${tag}    ↳ ok (fallback)`); } catch {}
     }
   }
+  // limpia de public/ las imágenes que ya no están en la carpeta de origen
+  try {
+    const keep = new Set(files.map((f) => f.replace(/\.[^.]+$/, ".png")));
+    for (const f of readdirSync(outDir)) if (/\.(png|jpe?g)$/i.test(f) && !keep.has(f)) rmSync(join(outDir, f), { force: true });
+  } catch {}
 }
-console.log(`\n✅ Listo. Imágenes en public/projects/<id>/images/`);
+console.log(`\n✅ Listo. ${total} imagen(es) en public/projects/<id>/images/`);

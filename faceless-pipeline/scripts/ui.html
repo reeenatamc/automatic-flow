@@ -644,8 +644,17 @@ async function loadBuilder() {
 function sbFmt(s) { const m = Math.floor(s / 60); const ss = (s % 60).toFixed(1).padStart(4, "0"); return m + ":" + ss; }
 function renderTray() {
   const project = $("#project").value;
+  const block = $("#sbBlock").value;
+  const known = sbChapters.map((c) => c.block);
   const tray = $("#tray"); tray.innerHTML = "";
-  sbImages.forEach((f) => {
+  // muestra las imágenes de ESTA tanda (<block>-NN) + las que no pertenecen a
+  // ninguna tanda (crudas sin asignar). Así no se mezclan las 36 de todas.
+  const shown = sbImages.filter((f) => {
+    const m = f.match(/^([\w-]+)-\d+\.png$/i);
+    const pfx = m ? m[1] : null;
+    return pfx === block || !known.includes(pfx);
+  });
+  (shown.length ? shown : sbImages).forEach((f) => {
     const wrap = document.createElement("div"); wrap.className = "thumb";
     const img = document.createElement("img");
     img.src = "/img/" + project + "/" + encodeURIComponent(f);
@@ -715,7 +724,7 @@ async function applyScenes() {
   if (j.ok) { toast("Escenas aplicadas a " + $("#sbBlock").value); loadConfig(); refresh(); $("#sbmsg").innerHTML = ic("check") + " Aplicado (" + imgs.length + " imgs). Ahora dale Manifest y Render."; }
   else { $("#sbmsg").innerHTML = ic("x") + " " + j.error; }
 }
-$("#sbBlock").addEventListener("change", renderBuilder);
+$("#sbBlock").addEventListener("change", () => { renderTray(); renderBuilder(); });
 
 // ---- Subir archivos (audios / imágenes) ----
 async function uploadFiles(files, kind) {
