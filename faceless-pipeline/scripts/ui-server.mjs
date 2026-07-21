@@ -100,6 +100,26 @@ function serveVideo(req, res, filePath) {
   }
 }
 
+// Al renombrar imágenes, actualiza sus referencias en el config (block.images)
+// para que las escenas ya acomodadas no se rompan. `map` = { viejo: nuevo }.
+function updateImageRefs(project, map) {
+  try {
+    const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+    const p = (cfg.projects || []).find((x) => x.id === project);
+    if (!p) return;
+    let changed = false;
+    for (const b of p.blocks || []) {
+      if (!Array.isArray(b.images)) continue;
+      b.images = b.images.map((im) => {
+        const file = typeof im === "string" ? im : im.file;
+        if (map[file]) { changed = true; return typeof im === "string" ? map[file] : { ...im, file: map[file] }; }
+        return im;
+      });
+    }
+    if (changed) writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+  } catch {}
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -311,9 +331,10 @@ const server = createServer(async (req, res) => {
         const dir = resolve(ROOT, `../proyectos/${proj}/imagenes`);
         let max = 0;
         try { for (const f of readdirSync(dir)) { const m = f.match(new RegExp("^" + pfx + "-(\\d+)\\.", "i")); if (m) max = Math.max(max, parseInt(m[1], 10)); } } catch {}
-        const names = [];
+        const names = [], refMap = {};
         files.forEach((raw) => {
-          const src = join(dir, basename(raw));
+          const rawName = basename(raw);
+          const src = join(dir, rawName);
           if (!existsSync(src)) return;
           let ext = (raw.match(/\.(png|jpe?g)$/i) || [".png"])[0].toLowerCase();
           if (ext === ".jpeg") ext = ".jpg";
@@ -321,7 +342,42 @@ const server = createServer(async (req, res) => {
           const nn = `${pfx}-${String(max).padStart(2, "0")}${ext}`;
           renameSync(src, join(dir, nn));
           names.push(nn);
+          refMap[rawName] = nn;
         });
+        updateImageRefs(proj, refMap);
+        json(res, { ok: true, count: names.length, names });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
+  // QUITAR imágenes de su tanda (des-asignar): las renombra a un nombre neutro
+  // "libre-NN" para que vuelvan a salir como "sin asignar" y puedas reasignarlas.
+  if (path === "/api/unassign-images") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, files } = JSON.parse(body);
+        const proj = (project || "").replace(/[^\w-]/g, "");
+        if (!proj || !Array.isArray(files) || !files.length) return json(res, { ok: false, error: "faltan imágenes" }, 400);
+        const dir = resolve(ROOT, `../proyectos/${proj}/imagenes`);
+        let max = 0;
+        try { for (const f of readdirSync(dir)) { const m = f.match(/^libre-(\d+)\./i); if (m) max = Math.max(max, parseInt(m[1], 10)); } } catch {}
+        const names = [], refMap = {};
+        files.forEach((raw) => {
+          const rawName = basename(raw);
+          const src = join(dir, rawName);
+          if (!existsSync(src)) return;
+          let ext = (rawName.match(/\.(png|jpe?g)$/i) || [".png"])[0].toLowerCase();
+          if (ext === ".jpeg") ext = ".jpg";
+          max += 1;
+          const nn = `libre-${String(max).padStart(2, "0")}${ext}`;
+          renameSync(src, join(dir, nn));
+          names.push(nn);
+          refMap[rawName] = nn;
+        });
+        updateImageRefs(proj, refMap);
         json(res, { ok: true, count: names.length, names });
       } catch (e) { json(res, { ok: false, error: e.message }, 400); }
     });
@@ -530,14 +586,16 @@ const server = createServer(async (req, res) => {
         // dos fases (temp → final) para no pisar archivos
         const tmp = files.map((f, i) => ({ from: f, tmp: `__seq${i}__${f}` }));
         for (const t of tmp) renameSync(join(dir, t.from), join(dir, t.tmp));
-        const names = [];
+        const names = [], refMap = {};
         tmp.forEach((t, i) => {
           let ext = (t.from.match(/\.(png|jpe?g)$/i) || [".png"])[0].toLowerCase();
           if (ext === ".jpeg") ext = ".jpg";
           const nn = `${pfx}-${String(i + 1).padStart(2, "0")}${ext}`;
           renameSync(join(dir, t.tmp), join(dir, nn));
           names.push(nn);
+          refMap[t.from] = nn;
         });
+        updateImageRefs(proj, refMap);
         json(res, { ok: true, count: names.length, names });
       } catch (e) { json(res, { ok: false, error: e.message }, 400); }
     });
