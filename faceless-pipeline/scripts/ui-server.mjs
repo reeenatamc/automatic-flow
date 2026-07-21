@@ -503,6 +503,55 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // listar TODOS los bloques (tandas + cards) en orden, para manejarlos
+  if (path === "/api/blocks") {
+    const project = url.searchParams.get("project") || "";
+    let cfg; try { cfg = JSON.parse(readFileSync(CONFIG, "utf8")); } catch { return json(res, { blocks: [] }); }
+    const p = (cfg.projects || []).find((x) => x.id === project);
+    if (!p) return json(res, { blocks: [] });
+    const blocks = (p.blocks || []).map((b) =>
+      b.card !== undefined
+        ? { id: b.id, kind: "card", card: b.card, subtitle: b.subtitle || "", seconds: b.seconds ?? 2 }
+        : { id: b.id, kind: "media", audio: basename(b.audio || ""), images: (b.images || []).length }
+    );
+    return json(res, { blocks });
+  }
+
+  // operar sobre los bloques: borrar, mover, o agregar un separador (card)
+  if (path === "/api/block-op") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, op, id, card, subtitle, seconds } = JSON.parse(body);
+        const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+        const p = (cfg.projects || []).find((x) => x.id === project);
+        if (!p) return json(res, { ok: false, error: "proyecto no encontrado" }, 404);
+        const blocks = p.blocks || (p.blocks = []);
+        const idx = blocks.findIndex((b) => b.id === id);
+        if (op === "delete") {
+          if (idx < 0) return json(res, { ok: false, error: "bloque no encontrado" }, 404);
+          blocks.splice(idx, 1);
+          // limpia hooks que apuntaban a ese bloque (ventana o bloques enteros)
+          p.hooks = (p.hooks || []).filter((h) => h.block !== id && !(h.blocks || []).includes(id));
+        } else if (op === "up" || op === "down") {
+          const j = op === "up" ? idx - 1 : idx + 1;
+          if (idx < 0 || j < 0 || j >= blocks.length) return json(res, { ok: false, error: "no se puede mover" }, 400);
+          [blocks[idx], blocks[j]] = [blocks[j], blocks[idx]];
+        } else if (op === "add-card") {
+          const cid = (id || card || "card").toString().trim().replace(/\s+/g, "-").replace(/[^\w-]/g, "") || `card${blocks.length}`;
+          if (blocks.some((b) => b.id === cid)) return json(res, { ok: false, error: "ya existe un bloque con ese id" }, 400);
+          const cb = { id: cid, card: (card || "TÍTULO").toString(), seconds: Number(seconds) || 2 };
+          if (subtitle) cb.subtitle = String(subtitle);
+          blocks.push(cb);
+        } else return json(res, { ok: false, error: "operación desconocida" }, 400);
+        writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+        json(res, { ok: true });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
   // guardar los hooks de un proyecto en el config
   if (path === "/api/save-hooks") {
     let body = "";

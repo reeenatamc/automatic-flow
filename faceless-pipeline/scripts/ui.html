@@ -80,6 +80,15 @@
   #tray img { width: 78px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: grab; display: block; }
   #tray img.used { opacity: 0.28; }
   #tray .lbl { position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: #000a; padding: 1px 5px; border-radius: 3px; color: #fff; }
+  /* bloques / tandas */
+  .blk { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; background: var(--panel2); }
+  .blk.card { border-style: dashed; }
+  .blk .bt { font-weight: 600; font-size: 13px; min-width: 110px; }
+  .blk .bmeta { color: var(--muted); font-size: 12px; flex: 1; }
+  .blk .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; padding: 2px 7px; border-radius: 5px; background: #ffffff12; color: var(--muted); }
+  .blk .tag.media { color: var(--accent); }
+  .arrows { display: flex; flex-direction: column; gap: 1px; }
+  .arrows button { padding: 1px 6px; line-height: 1; }
   /* look preview */
   .lookprev { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
   .lookprev figure { margin: 0; }
@@ -259,6 +268,20 @@
     <div class="card">
       <div class="status" style="margin-bottom:8px">Deja tus audios (capítulos/partes) en <b>proyectos/&lt;proyecto&gt;/audio/</b> y crea una tanda por cada uno.</div>
       <div id="audios"></div>
+    </div>
+
+    <h3><svg class="ic"><use href="#i-film"></use></svg> Tandas y separadores (orden del video)
+      <button class="tiny" onclick="loadBlocks()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button>
+    </h3>
+    <div class="card">
+      <div id="blocks"><span class="status">Dale "Cargar".</span></div>
+      <div class="bar" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border)">
+        <span class="status">Nuevo separador:</span>
+        <input id="cardText" class="num" style="width:150px" placeholder="TÍTULO (ej: AÑOS ANTES)">
+        <input id="cardSub" class="num" style="width:140px" placeholder="subtítulo (opcional)">
+        <input id="cardSec" class="num" style="width:56px" type="number" step="0.5" value="2"><span class="status">s</span>
+        <button class="tiny" onclick="addCard()"><svg class="ic"><use href="#i-plus"></use></svg> Agregar separador</button>
+      </div>
     </div>
 
     <h3><svg class="ic"><use href="#i-layers"></use></svg> Constructor de escenas (arrastra imagen → tiempo)</h3>
@@ -500,7 +523,7 @@ function renderVideos(videos) {
 }
 async function reveal(name) { await fetch("/api/reveal?file=" + encodeURIComponent(name)); toast("📂 Mostrando en Finder…"); }
 
-$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); loadAudios(); loadGuion(); });
+$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); loadAudios(); loadGuion(); loadBlocks(); });
 
 async function viewTs() {
   const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
@@ -755,6 +778,45 @@ async function createBlock(file) {
   else toast(j.error || "No se pudo crear");
 }
 
+// ---- Tandas y separadores (manejo de bloques) ----
+async function loadBlocks() {
+  const project = $("#project").value;
+  const d = await (await fetch("/api/blocks?project=" + encodeURIComponent(project))).json();
+  const blocks = d.blocks || [];
+  const box = $("#blocks"); box.innerHTML = "";
+  if (!blocks.length) { box.innerHTML = '<span class="status">Sin tandas. Crea una desde "Audios del proyecto" o agrega un separador abajo.</span>'; return; }
+  blocks.forEach((b, i) => {
+    const el = document.createElement("div"); el.className = "blk" + (b.kind === "card" ? " card" : "");
+    const meta = b.kind === "card"
+      ? '"' + b.card + '"' + (b.subtitle ? ' · ' + b.subtitle : '') + ' · ' + b.seconds + 's'
+      : b.audio + ' · ' + b.images + ' imgs';
+    el.innerHTML =
+      '<span class="tag ' + (b.kind === "media" ? "media" : "") + '">' + (b.kind === "card" ? "card" : "tanda") + '</span>' +
+      '<span class="bt">' + b.id + '</span><span class="bmeta">' + meta + '</span>';
+    const arrows = document.createElement("div"); arrows.className = "arrows";
+    const up = document.createElement("button"); up.className = "tiny"; up.innerHTML = "▲"; up.disabled = i === 0; up.onclick = () => blockOp("up", b.id);
+    const dn = document.createElement("button"); dn.className = "tiny"; dn.innerHTML = "▼"; dn.disabled = i === blocks.length - 1; dn.onclick = () => blockOp("down", b.id);
+    arrows.appendChild(up); arrows.appendChild(dn);
+    const del = document.createElement("button"); del.className = "tiny"; del.innerHTML = ic("x"); del.title = "borrar";
+    del.onclick = () => { if (confirm("¿Borrar '" + b.id + "' del proyecto?")) blockOp("delete", b.id); };
+    el.appendChild(arrows); el.appendChild(del);
+    box.appendChild(el);
+  });
+}
+async function blockOp(op, id, extra) {
+  const body = Object.assign({ project: $("#project").value, op, id }, extra || {});
+  const r = await fetch("/api/block-op", { method: "POST", body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!j.ok) { toast(j.error || "error"); return; }
+  loadBlocks(); loadConfig(); loadAudios(); refresh();
+}
+function addCard() {
+  const card = $("#cardText").value.trim();
+  if (!card) { toast("Ponle un texto al separador"); return; }
+  blockOp("add-card", card.replace(/\s+/g, "-").toLowerCase(), { card, subtitle: $("#cardSub").value.trim(), seconds: +$("#cardSec").value });
+  $("#cardText").value = ""; $("#cardSub").value = "";
+}
+
 // ---- Editor de hooks ----
 let hkBlocks = [], hkHooks = [];
 const hkFmt = (s) => { const m = Math.floor(s / 60); const ss = (s % 60).toFixed(1).padStart(4, "0"); return m + ":" + ss; };
@@ -850,7 +912,7 @@ $("#hkEnd").addEventListener("input", updateHkPreview);
 
 $("#audioUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "audio"); e.target.value = ""; });
 $("#imageUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "image"); e.target.value = ""; });
-loadLooks(); refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion();
+loadLooks(); refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion(); loadBlocks();
 </script>
 </body>
 </html>
