@@ -96,6 +96,11 @@
   .blk .tag.media { color: var(--accent); }
   .arrows { display: flex; flex-direction: column; gap: 1px; }
   .arrows button { padding: 1px 6px; line-height: 1; }
+  /* galería de imágenes procesadas */
+  .imggrid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .imggrid figure { margin: 0; width: 104px; }
+  .imggrid img { width: 104px; height: 62px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; background: #000; }
+  .imggrid figcaption { font-size: 9px; color: var(--muted); margin-top: 3px; text-align: center; word-break: break-all; }
   /* look preview */
   .lookprev { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
   .lookprev figure { margin: 0; }
@@ -250,12 +255,15 @@
     <div class="status" style="margin-bottom:6px"><b>Aquí se generan.</b> Groq escucha tus audios y saca los tiempos de cada escena. Con eso vas acomodando las imágenes en el Paso 6.</div>
     <div id="tsview"></div>
 
-    <h3 id="s-imagenes" data-sec="imagenes"><svg class="ic"><use href="#i-image"></use></svg> Paso 5 · Imágenes (subir + preprocesar)
-      <button class="tiny" onclick="document.getElementById('imageUp').click()"><svg class="ic"><use href="#i-download"></use></svg> Subir imágenes</button>
-      <input type="file" id="imageUp" accept="image/png,image/jpeg" multiple hidden>
-    </h3>
+    <h3 id="s-imagenes" data-sec="imagenes"><svg class="ic"><use href="#i-image"></use></svg> Paso 5 · Imágenes (subir + preprocesar)</h3>
     <div class="card">
-      <div class="status" style="margin-bottom:10px">Sube las fotos de las escenas. Elige el <b>look</b>, previsualiza, y dale <b>Procesar</b>: sube de resolución con IA, recodifica y <b>borra los metadatos de origen</b>.</div>
+      <div class="status" style="margin-bottom:10px">Elige la tanda y sube sus fotos: se <b>renombran solas en secuencia</b> (ej. <b>cap1-01.png, cap1-02.png…</b>). Luego elige el <b>look</b> y dale <b>Procesar</b> (upscale IA + recodifica + borra metadatos de origen).</div>
+      <div class="bar" style="margin-bottom:10px">
+        Tanda: <select id="imgBlock"></select>
+        <input type="file" id="imageUp" accept="image/png,image/jpeg" multiple hidden>
+        <button class="tiny" onclick="document.getElementById('imageUp').click()"><svg class="ic"><use href="#i-download"></use></svg> Subir imágenes a esta tanda</button>
+        <button class="tiny" onclick="renameSequence()"><svg class="ic"><use href="#i-sparkles"></use></svg> Renombrar en secuencia</button>
+      </div>
       <div class="bar" style="margin-bottom:10px">
         Look: <select id="lookSel"></select>
         <button class="tiny" onclick="previewLook()"><svg class="ic"><use href="#i-eye"></use></svg> Previsualizar</button>
@@ -266,6 +274,10 @@
       <div id="lookDesc" class="status" style="margin-bottom:10px"></div>
       <div id="lookPrev" class="lookprev"><span class="status">Elige un look y dale "Previsualizar".</span></div>
       <div id="lookmsg" class="status" style="margin-top:8px"></div>
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+        <div class="status" style="margin-bottom:8px" id="imgGridTitle">Imágenes procesadas:</div>
+        <div id="imgGrid" class="imggrid"></div>
+      </div>
     </div>
 
     <h3 id="s-escenas" data-sec="escenas"><svg class="ic"><use href="#i-layers"></use></svg> Paso 6 · Escenas (acomoda imagen → tiempo)</h3>
@@ -467,6 +479,8 @@ function run(cmd, label) {
   es.addEventListener("done", (e) => {
     log("— terminado (código " + e.data + ") —", "done");
     es.close(); setRunning(false); refresh(); loadHealth();
+    if (/enhance|build|prepare/.test(cmd)) loadImages();
+    if (/transcribe|timestamps|build/.test(cmd)) { loadAudios(); if (typeof loadHooks === "function") loadHooks(); }
     toast(e.data === "0" ? "✅ Listo: " + cmd : "⚠️ Terminó con código " + e.data);
   });
   es.onerror = () => { es.close(); setRunning(false); };
@@ -561,7 +575,9 @@ function renderVideos(videos) {
 }
 async function reveal(name) { await fetch("/api/reveal?file=" + encodeURIComponent(name)); toast("📂 Mostrando en Finder…"); }
 
-$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); loadAudios(); loadGuion(); loadBlocks(); });
+// carga todos los datos que dependen del proyecto seleccionado
+function loadProject() { loadHooks(); loadAudios(); loadGuion(); loadBlocks(); loadImages(); fillImgBlocks(); }
+$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadProject(); });
 
 async function viewTs() {
   const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
@@ -694,18 +710,37 @@ $("#sbBlock").addEventListener("change", renderBuilder);
 async function uploadFiles(files, kind) {
   if (!files || !files.length) return;
   const project = $("#project").value;
+  const prefix = kind === "image" && $("#imgBlock") ? $("#imgBlock").value : "";
   let ok = 0;
   toast("Subiendo " + files.length + " archivo(s)…");
   for (const f of files) {
     try {
       const buf = await f.arrayBuffer();
-      const r = await fetch("/api/upload?project=" + encodeURIComponent(project) + "&kind=" + kind + "&name=" + encodeURIComponent(f.name), { method: "POST", body: buf });
-      if ((await r.json()).ok) ok++;
+      const q = "/api/upload?project=" + encodeURIComponent(project) + "&kind=" + kind + "&name=" + encodeURIComponent(f.name) + (prefix ? "&prefix=" + encodeURIComponent(prefix) : "");
+      if ((await (await fetch(q, { method: "POST", body: buf })).json()).ok) ok++;
     } catch {}
   }
-  toast(ok + "/" + files.length + " subido(s)");
+  toast(ok + "/" + files.length + " subido(s)" + (prefix ? " como " + prefix + "-NN" : ""));
   if (kind === "audio") loadAudios();
-  else { toast("Imágenes subidas — corre Mejorar imágenes para procesarlas"); }
+  else { loadImages(); if (ok) toast(ok + " imágenes subidas como " + prefix + "-NN — dale \"Procesar imágenes\""); }
+}
+async function renameSequence() {
+  const project = $("#project").value, prefix = $("#imgBlock") ? $("#imgBlock").value : "";
+  if (!prefix) { toast("Elige una tanda"); return; }
+  if (!confirm('¿Renombrar las imágenes de "' + prefix + '" en secuencia (' + prefix + '-01, -02…)?')) return;
+  const j = await (await fetch("/api/rename-sequence", { method: "POST", body: JSON.stringify({ project, prefix }) })).json();
+  if (j.ok) { toast(j.count + " imágenes renombradas en secuencia"); loadImages(); }
+  else toast(j.error || "error");
+}
+async function fillImgBlocks() {
+  const project = $("#project").value; const sel = $("#imgBlock");
+  if (!project || !sel) return;
+  const d = await (await fetch("/api/blocks?project=" + encodeURIComponent(project))).json();
+  const media = (d.blocks || []).filter((b) => b.kind === "media");
+  const cur = sel.value;
+  sel.innerHTML = "";
+  media.forEach((b) => { const o = document.createElement("option"); o.value = b.id; o.textContent = b.id; sel.appendChild(o); });
+  if (cur && media.some((b) => b.id === cur)) sel.value = cur;
 }
 document.addEventListener("DOMContentLoaded", () => {});
 // (los listeners se enganchan al final, tras definir todo)
@@ -734,6 +769,19 @@ async function createProject() {
   await refresh();
   $("#project").value = j.id;
   $("#project").dispatchEvent(new Event("change"));
+}
+
+// ---- Galería de imágenes procesadas (Paso 5) ----
+async function loadImages() {
+  const project = $("#project").value;
+  if (!project) return;
+  const grid = $("#imgGrid");
+  let imgs = [];
+  try { imgs = (await (await fetch("/api/images?project=" + encodeURIComponent(project))).json()).images || []; } catch {}
+  $("#imgGridTitle").textContent = imgs.length ? "Imágenes procesadas (" + imgs.length + "):" : "Imágenes procesadas:";
+  grid.innerHTML = imgs.length
+    ? imgs.map((f) => '<figure><img loading="lazy" src="/img/' + project + '/' + encodeURIComponent(f) + '"><figcaption>' + f.replace(/\.[^.]+$/, "") + '</figcaption></figure>').join("")
+    : '<span class="status">Aún no hay imágenes procesadas. Sube fotos y dale "Procesar imágenes".</span>';
 }
 
 // ---- Look / presets de imagen ----
@@ -785,6 +833,7 @@ async function saveGuion() {
 // ---- Audios del proyecto ----
 async function loadAudios() {
   const project = $("#project").value;
+  if (!project) return;
   const box = $("#audios");
   const d = await (await fetch("/api/audios?project=" + encodeURIComponent(project))).json();
   const auds = d.audios || [];
@@ -817,6 +866,7 @@ async function createBlock(file) {
 // ---- Tandas y separadores (manejo de bloques) ----
 async function loadBlocks() {
   const project = $("#project").value;
+  if (!project) return;
   const d = await (await fetch("/api/blocks?project=" + encodeURIComponent(project))).json();
   const blocks = d.blocks || [];
   const box = $("#blocks"); box.innerHTML = "";
@@ -860,6 +910,7 @@ function hkCurBlock() { return hkBlocks.find((b) => b.id === $("#hkBlock").value
 
 async function loadHooks() {
   const project = $("#project").value;
+  if (!project) return;
   const d = await (await fetch("/api/project-detail?project=" + encodeURIComponent(project))).json();
   hkBlocks = d.blocks || [];
   hkHooks = (d.hooks || []).map((h) => ({ ...h }));
@@ -949,7 +1000,10 @@ $("#hkEnd").addEventListener("input", updateHkPreview);
 $("#audioUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "audio"); e.target.value = ""; });
 $("#imageUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "image"); e.target.value = ""; });
 buildStepper();
-loadLooks(); refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion(); loadBlocks();
+loadLooks(); loadHealth(); loadConfig();
+// IMPORTANTE: esperar a que refresh() llene el selector de proyecto ANTES de
+// cargar lo que depende del proyecto (si no, sale con proyecto vacío → "proyectos//audio").
+refresh().then(loadProject);
 </script>
 </body>
 </html>

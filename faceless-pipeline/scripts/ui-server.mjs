@@ -4,7 +4,7 @@
  * Corre: npm run ui   (abre http://localhost:4599)
  */
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync, mkdirSync, renameSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, join, resolve, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -432,16 +432,55 @@ const server = createServer(async (req, res) => {
   if (path === "/api/upload") {
     const project = (url.searchParams.get("project") || "").replace(/[^\w-]/g, "");
     const kind = url.searchParams.get("kind"); // "audio" | "image"
-    const name = basename(url.searchParams.get("name") || "");
+    const prefix = (url.searchParams.get("prefix") || "").replace(/[^\w-]/g, ""); // tanda → renombra en secuencia
+    let name = basename(url.searchParams.get("name") || "");
     const okExt = kind === "audio" ? /\.(mp3|wav|m4a|aac)$/i : /\.(png|jpe?g)$/i;
     if (!project || !name || !okExt.test(name)) return json(res, { ok: false, error: "nombre o tipo no válido" }, 400);
     const destDir = resolve(ROOT, `../proyectos/${project}/${kind === "audio" ? "audio" : "imagenes"}`);
     mkdirSync(destDir, { recursive: true });
+    // imágenes con tanda → nombre en secuencia <prefix>-NN (continúa la numeración existente)
+    if (kind === "image" && prefix) {
+      let ext = (name.match(/\.(png|jpe?g)$/i) || [".png"])[0].toLowerCase();
+      if (ext === ".jpeg") ext = ".jpg";
+      let max = 0;
+      try { for (const f of readdirSync(destDir)) { const m = f.match(new RegExp("^" + prefix + "-(\\d+)\\.", "i")); if (m) max = Math.max(max, parseInt(m[1], 10)); } } catch {}
+      name = prefix + "-" + String(max + 1).padStart(2, "0") + ext;
+    }
     const chunks = [];
     req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
       try { writeFileSync(join(destDir, name), Buffer.concat(chunks)); json(res, { ok: true, name }); }
       catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
+  // renombrar en secuencia las imágenes de una tanda: <prefix>-01..NN (arregla huecos/orden)
+  if (path === "/api/rename-sequence") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, prefix } = JSON.parse(body);
+        const pfx = (prefix || "").replace(/[^\w-]/g, "");
+        const proj = (project || "").replace(/[^\w-]/g, "");
+        if (!pfx || !proj) return json(res, { ok: false, error: "falta proyecto o tanda" }, 400);
+        const dir = resolve(ROOT, `../proyectos/${proj}/imagenes`);
+        const files = readdirSync(dir).filter((f) => new RegExp("^" + pfx + "-", "i").test(f) && /\.(png|jpe?g)$/i.test(f)).sort();
+        if (!files.length) return json(res, { ok: false, error: `no hay imágenes '${pfx}-*'` }, 404);
+        // dos fases (temp → final) para no pisar archivos
+        const tmp = files.map((f, i) => ({ from: f, tmp: `__seq${i}__${f}` }));
+        for (const t of tmp) renameSync(join(dir, t.from), join(dir, t.tmp));
+        const names = [];
+        tmp.forEach((t, i) => {
+          let ext = (t.from.match(/\.(png|jpe?g)$/i) || [".png"])[0].toLowerCase();
+          if (ext === ".jpeg") ext = ".jpg";
+          const nn = `${pfx}-${String(i + 1).padStart(2, "0")}${ext}`;
+          renameSync(join(dir, t.tmp), join(dir, nn));
+          names.push(nn);
+        });
+        json(res, { ok: true, count: names.length, names });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
     });
     return;
   }
