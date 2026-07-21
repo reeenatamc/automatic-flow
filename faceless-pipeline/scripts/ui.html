@@ -285,6 +285,7 @@
           <span class="status" id="imgSelCount">0 seleccionadas</span>
           <button class="tiny go" onclick="assignSelected()"><svg class="ic"><use href="#i-check"></use></svg> Asignar a la tanda</button>
           <button class="tiny" onclick="unassignSelected()"><svg class="ic"><use href="#i-x"></use></svg> Quitar de tanda</button>
+          <button class="tiny" onclick="deleteSelected()"><svg class="ic"><use href="#i-x"></use></svg> Eliminar</button>
           <button class="tiny" onclick="clearImgSel()"><svg class="ic"><use href="#i-refresh"></use></svg> Limpiar selección</button>
         </div>
         <div class="status" style="margin-bottom:8px"><b>Asignar:</b> clic en las imágenes en orden → "Asignar" (se renombran &lt;tanda&gt;-01, -02…). &nbsp;<b>¿Te equivocaste?</b> Selecciona las mal asignadas y "Quitar de tanda" (vuelven a "sin asignar"), o elige la tanda correcta y "Asignar" para moverlas.</div>
@@ -841,6 +842,14 @@ async function unassignSelected() {
   if (!confirm("¿Quitar " + imgSel.length + " imagen(es) de su tanda? Vuelven a 'sin asignar'.")) return;
   const j = await (await fetch("/api/unassign-images", { method: "POST", body: JSON.stringify({ project, files: imgSel }) })).json();
   if (j.ok) { toast(j.count + " imágenes quitadas de su tanda"); imgSel = []; loadImages(); loadConfig(); }
+  else toast(j.error || "error");
+}
+async function deleteSelected() {
+  const project = $("#project").value;
+  if (!imgSel.length) { toast("Selecciona las imágenes a eliminar"); return; }
+  if (!confirm("¿Eliminar " + imgSel.length + " imagen(es)? Van a la papelera (proyectos/" + project + "/imagenes/_papelera), se pueden recuperar.")) return;
+  const j = await (await fetch("/api/delete-images", { method: "POST", body: JSON.stringify({ project, files: imgSel }) })).json();
+  if (j.ok) { toast(j.count + " imágenes → papelera"); imgSel = []; loadImages(); loadConfig(); }
   else toast(j.error || "error");
 }
 

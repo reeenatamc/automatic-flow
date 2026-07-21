@@ -4,7 +4,7 @@
  * Corre: npm run ui   (abre http://localhost:4599)
  */
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync, mkdirSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, join, resolve, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -115,6 +115,23 @@ function updateImageRefs(project, map) {
         if (map[file]) { changed = true; return typeof im === "string" ? map[file] : { ...im, file: map[file] }; }
         return im;
       });
+    }
+    if (changed) writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+  } catch {}
+}
+
+// Quita del config las imágenes borradas (fileset = Set de nombres).
+function removeImageRefs(project, fileset) {
+  try {
+    const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+    const p = (cfg.projects || []).find((x) => x.id === project);
+    if (!p) return;
+    let changed = false;
+    for (const b of p.blocks || []) {
+      if (!Array.isArray(b.images)) continue;
+      const before = b.images.length;
+      b.images = b.images.filter((im) => !fileset.has(typeof im === "string" ? im : im.file));
+      if (b.images.length !== before) changed = true;
     }
     if (changed) writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
   } catch {}
@@ -346,6 +363,40 @@ const server = createServer(async (req, res) => {
         });
         updateImageRefs(proj, refMap);
         json(res, { ok: true, count: names.length, names });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
+  // ELIMINAR imágenes: las mueve a imagenes/_papelera/ (NO borrado permanente,
+  // por si te equivocas), borra su versión procesada y quita sus referencias.
+  if (path === "/api/delete-images") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, files } = JSON.parse(body);
+        const proj = (project || "").replace(/[^\w-]/g, "");
+        if (!proj || !Array.isArray(files) || !files.length) return json(res, { ok: false, error: "faltan imágenes" }, 400);
+        const srcDir = resolve(ROOT, `../proyectos/${proj}/imagenes`);
+        const trashDir = join(srcDir, "_papelera");
+        const pubDir = join(ROOT, "public", "projects", proj, "images");
+        mkdirSync(trashDir, { recursive: true });
+        let n = 0; const del = new Set();
+        for (const raw of files) {
+          const name = basename(raw);
+          const src = join(srcDir, name);
+          if (!existsSync(src)) continue;
+          // a la papelera (con sufijo si ya existe una con ese nombre)
+          let dest = join(trashDir, name);
+          if (existsSync(dest)) dest = join(trashDir, name.replace(/(\.[^.]+)$/, `-${Date.now()}$1`));
+          renameSync(src, dest);
+          n++; del.add(name);
+          // borra la versión procesada en public/ (es regenerable)
+          try { const pub = join(pubDir, name.replace(/\.[^.]+$/, ".png")); if (existsSync(pub)) rmSync(pub, { force: true }); } catch {}
+        }
+        removeImageRefs(proj, del);
+        json(res, { ok: true, count: n });
       } catch (e) { json(res, { ok: false, error: e.message }, 400); }
     });
     return;
