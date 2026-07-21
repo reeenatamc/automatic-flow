@@ -17,6 +17,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const PORT = 4599;
 
+// Red de seguridad: un request roto (ej. rango de video inválido) NO debe tumbar
+// todo el servidor. Loguea y sigue vivo.
+process.on("uncaughtException", (e) => console.error("⚠️  error no fatal:", (e && e.message) || e));
+process.on("unhandledRejection", (e) => console.error("⚠️  rechazo no manejado:", (e && e.message) || e));
+
 // --- abrir cosas del sistema, multiplataforma (antes solo `open` de macOS) ---
 // Abre una carpeta, un archivo o una URL con el programa por defecto del sistema.
 function openInSystem(target) {
@@ -82,20 +87,27 @@ function getState() {
 
 function serveVideo(req, res, filePath) {
   const stat = statSync(filePath);
-  const range = req.headers.range;
-  if (range) {
-    const m = range.match(/bytes=(\d+)-(\d*)/);
-    const start = parseInt(m[1], 10);
-    const end = m[2] ? parseInt(m[2], 10) : stat.size - 1;
+  const size = stat.size;
+  const m = req.headers.range && req.headers.range.match(/bytes=(\d+)-(\d*)/);
+  if (m) {
+    let start = parseInt(m[1], 10);
+    let end = m[2] ? parseInt(m[2], 10) : size - 1;
+    // valida/clampa el rango: si viene fuera de rango, responde 416 en vez de crashear
+    if (Number.isNaN(start) || start >= size || start < 0) {
+      res.writeHead(416, { "Content-Range": `bytes */${size}` });
+      return res.end();
+    }
+    if (Number.isNaN(end) || end >= size) end = size - 1;
+    if (end < start) end = start;
     res.writeHead(206, {
-      "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+      "Content-Range": `bytes ${start}-${end}/${size}`,
       "Accept-Ranges": "bytes",
       "Content-Length": end - start + 1,
       "Content-Type": "video/mp4",
     });
     createReadStream(filePath, { start, end }).pipe(res);
   } else {
-    res.writeHead(200, { "Content-Length": stat.size, "Content-Type": "video/mp4", "Accept-Ranges": "bytes" });
+    res.writeHead(200, { "Content-Length": size, "Content-Type": "video/mp4", "Accept-Ranges": "bytes" });
     createReadStream(filePath).pipe(res);
   }
 }
