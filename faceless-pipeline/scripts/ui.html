@@ -80,6 +80,13 @@
   #tray img { width: 78px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: grab; display: block; }
   #tray img.used { opacity: 0.28; }
   #tray .lbl { position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: #000a; padding: 1px 5px; border-radius: 3px; color: #fff; }
+  /* stepper (guía de flujo) */
+  #stepper { position: sticky; top: 0; z-index: 50; display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 0; margin: 4px 0 6px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .step { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 20px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 12px; cursor: pointer; transition: .12s; }
+  .step:hover { border-color: var(--accent); color: var(--text); }
+  .step .n { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: #ffffff14; font-size: 11px; font-weight: 600; }
+  .step.active { color: var(--text); border-color: var(--accent); }
+  .step.active .n { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; }
   /* bloques / tandas */
   .blk { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; background: var(--panel2); }
   .blk.card { border-style: dashed; }
@@ -186,38 +193,7 @@
       <div class="status" style="margin-top:8px">Crea el proyecto y las carpetas <b>proyectos/&lt;id&gt;/audio</b> e <b>/imagenes</b>. Luego sube tus audios ahí.</div>
     </div>
 
-    <h3>1 · Validar</h3>
-    <div class="row">
-      <button data-cmd="check" class="go"><svg class="ic"><use href="#i-check"></use></svg> Revisar config (huecos, archivos, hooks)</button>
-    </div>
-
-    <h3>2 · Preparar</h3>
-    <div class="row">
-      <button data-cmd="timestamps"><svg class="ic"><use href="#i-clock"></use></svg> Timestamps (Groq)</button>
-      <button data-cmd="enhance"><svg class="ic"><use href="#i-image"></use></svg> Mejorar imágenes</button>
-      <button data-cmd="enhance-force"><svg class="ic"><use href="#i-image"></use></svg> Mejorar (forzar)</button>
-      <button data-cmd="transcribe"><svg class="ic"><use href="#i-message"></use></svg> Subtítulos (Groq)</button>
-      <button data-cmd="master"><svg class="ic"><use href="#i-sliders"></use></svg> Masterizar audio</button>
-      <button data-cmd="manifest"><svg class="ic"><use href="#i-layers"></use></svg> Manifest</button>
-      <button data-cmd="build" class="go"><svg class="ic"><use href="#i-settings"></use></svg> Preparar TODO (build)</button>
-    </div>
-
-    <h3>3 · Renderizar</h3>
-    <div class="row">
-      <button data-cmd="render-all" class="go"><svg class="ic"><use href="#i-film"></use></svg> Renderizar TODO</button>
-      <button data-cmd="render-full"><svg class="ic"><use href="#i-monitor"></use></svg> Completo (H+V)</button>
-      <button data-cmd="render-clips"><svg class="ic"><use href="#i-scissors"></use></svg> Clips por tanda</button>
-      <button data-cmd="render-hooks"><svg class="ic"><use href="#i-anchor"></use></svg> Hooks</button>
-      <button onclick="studio()"><svg class="ic"><use href="#i-play"></use></svg> Studio (preview)</button>
-    </div>
-
-    <h3>Carpetas rápidas</h3>
-    <div class="row">
-      <button onclick="openF('audio')"><svg class="ic"><use href="#i-folder"></use></svg> Audios</button>
-      <button onclick="openF('imagenes')"><svg class="ic"><use href="#i-folder"></use></svg> Imágenes</button>
-      <button onclick="openF('timestamps')"><svg class="ic"><use href="#i-folder"></use></svg> Timestamps</button>
-      <button onclick="openF('out')"><svg class="ic"><use href="#i-folder"></use></svg> Salidas</button>
-    </div>
+    <nav id="stepper"></nav>
 
     <div id="runbar">
       <div class="spin"></div>
@@ -230,13 +206,13 @@
     <h3>Consola <button class="tiny" onclick="document.getElementById('console').innerHTML=''">limpiar</button></h3>
     <div id="console"></div>
 
-    <h3>Timestamps
+    <h3 id="s-timestamps" data-sec="timestamps">Timestamps
       <button class="tiny" onclick="viewTs()"><svg class="ic"><use href="#i-eye"></use></svg> Ver</button>
       <button class="tiny" onclick="copyPrompt()"><svg class="ic"><use href="#i-clipboard"></use></svg> Copiar prompt para IA</button>
     </h3>
     <div id="tsview"></div>
 
-    <h3><svg class="ic"><use href="#i-image"></use></svg> Look / filtro de imagen</h3>
+    <h3 id="s-look" data-sec="look"><svg class="ic"><use href="#i-image"></use></svg> Look / filtro de imagen</h3>
     <div class="card">
       <div class="bar" style="margin-bottom:10px">
         Preset: <select id="lookSel"></select>
@@ -249,7 +225,7 @@
       <div id="lookmsg" class="status" style="margin-top:8px"></div>
     </div>
 
-    <h3><svg class="ic"><use href="#i-book"></use></svg> Guion completo (texto crudo)
+    <h3 id="s-guion" data-sec="guion"><svg class="ic"><use href="#i-book"></use></svg> Guion completo (texto crudo)
       <button class="tiny" onclick="loadGuion()"><svg class="ic"><use href="#i-refresh"></use></svg> Recargar</button>
     </h3>
     <div class="status" style="margin-bottom:6px">El guion completo de la narración, aparte de los timestamps. Se guarda en <b>proyectos/&lt;proyecto&gt;/guion.txt</b>.</div>
@@ -259,7 +235,7 @@
       <span id="guionmsg" class="status"></span>
     </div>
 
-    <h3><svg class="ic"><use href="#i-message"></use></svg> Audios del proyecto
+    <h3 id="s-audios" data-sec="audios"><svg class="ic"><use href="#i-message"></use></svg> Audios del proyecto
       <button class="tiny" onclick="document.getElementById('audioUp').click()"><svg class="ic"><use href="#i-download"></use></svg> Subir audios</button>
       <input type="file" id="audioUp" accept="audio/*,.mp3,.wav,.m4a" multiple hidden>
       <button class="tiny" onclick="loadAudios()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button>
@@ -270,7 +246,7 @@
       <div id="audios"></div>
     </div>
 
-    <h3><svg class="ic"><use href="#i-film"></use></svg> Tandas y separadores (orden del video)
+    <h3 id="s-tandas" data-sec="tandas"><svg class="ic"><use href="#i-film"></use></svg> Tandas y separadores (orden del video)
       <button class="tiny" onclick="loadBlocks()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button>
     </h3>
     <div class="card">
@@ -284,7 +260,7 @@
       </div>
     </div>
 
-    <h3><svg class="ic"><use href="#i-layers"></use></svg> Constructor de escenas (arrastra imagen → tiempo)</h3>
+    <h3 id="s-escenas" data-sec="escenas"><svg class="ic"><use href="#i-layers"></use></svg> Constructor de escenas (arrastra imagen → tiempo)</h3>
     <div class="card">
       <div class="bar" style="margin-bottom:12px">
         Capítulo: <select id="sbBlock"></select>
@@ -308,7 +284,7 @@
       <div id="sbmsg" class="status" style="margin-top:10px; word-break:break-all"></div>
     </div>
 
-    <h3><svg class="ic"><use href="#i-anchor"></use></svg> Editor de hooks (clips de gancho) <button class="tiny" onclick="loadHooks()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button></h3>
+    <h3 id="s-hooks" data-sec="hooks"><svg class="ic"><use href="#i-anchor"></use></svg> Editor de hooks (clips de gancho) <button class="tiny" onclick="loadHooks()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button></h3>
     <div class="card">
       <div class="bar" style="margin-bottom:10px">
         Tanda: <select id="hkBlock"></select>
@@ -348,17 +324,51 @@
       </div>
     </div>
 
-    <h3>Config (projects.config.json)</h3>
-    <textarea id="config" spellcheck="false"></textarea>
-    <div class="row" style="margin-top:10px; align-items:center">
-      <button onclick="saveConfig()" class="go"><svg class="ic"><use href="#i-save"></use></svg> Guardar</button>
-      <button onclick="formatConfig()" class="tiny"><svg class="ic"><use href="#i-sparkles"></use></svg> Formatear JSON</button>
-      <button onclick="loadConfig()" class="tiny"><svg class="ic"><use href="#i-undo"></use></svg> Recargar</button>
-      <span id="cfgmsg" class="status"></span>
+    <h3 id="s-generar" data-sec="generar"><svg class="ic"><use href="#i-film"></use></svg> Generar el video</h3>
+    <div class="card">
+      <div class="status" style="margin-bottom:8px">Cuando tengas todo listo: valida, prepara y renderiza.</div>
+      <div class="row" style="margin-bottom:8px">
+        <button data-cmd="check" class="go"><svg class="ic"><use href="#i-check"></use></svg> Validar config</button>
+        <button data-cmd="build" class="go"><svg class="ic"><use href="#i-settings"></use></svg> Preparar TODO (build)</button>
+        <button data-cmd="render-all" class="go"><svg class="ic"><use href="#i-film"></use></svg> Renderizar TODO</button>
+      </div>
+      <div class="row">
+        <button data-cmd="render-full"><svg class="ic"><use href="#i-monitor"></use></svg> Completo (H+V)</button>
+        <button data-cmd="render-clips"><svg class="ic"><use href="#i-scissors"></use></svg> Clips por tanda</button>
+        <button data-cmd="render-hooks"><svg class="ic"><use href="#i-anchor"></use></svg> Solo hooks</button>
+        <button onclick="studio()"><svg class="ic"><use href="#i-play"></use></svg> Studio (preview)</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="status">Pasos sueltos:</span>
+        <button class="tiny" data-cmd="timestamps"><svg class="ic"><use href="#i-clock"></use></svg> Timestamps</button>
+        <button class="tiny" data-cmd="enhance"><svg class="ic"><use href="#i-image"></use></svg> Mejorar imágenes</button>
+        <button class="tiny" data-cmd="transcribe"><svg class="ic"><use href="#i-message"></use></svg> Subtítulos</button>
+        <button class="tiny" data-cmd="manifest"><svg class="ic"><use href="#i-layers"></use></svg> Manifest</button>
+      </div>
     </div>
 
-    <h3>Videos renderizados <button class="tiny" onclick="refresh()"><svg class="ic"><use href="#i-refresh"></use></svg></button></h3>
+    <h3 id="s-videos" data-sec="videos">Videos renderizados <button class="tiny" onclick="refresh()"><svg class="ic"><use href="#i-refresh"></use></svg></button></h3>
     <div id="videos"></div>
+
+    <h3 data-sec="avanzado">Avanzado</h3>
+    <div class="card">
+      <div class="status" style="margin-bottom:8px">Carpetas del proyecto:</div>
+      <div class="row" style="margin-bottom:14px">
+        <button class="tiny" onclick="openF('audio')"><svg class="ic"><use href="#i-folder"></use></svg> Audios</button>
+        <button class="tiny" onclick="openF('imagenes')"><svg class="ic"><use href="#i-folder"></use></svg> Imágenes</button>
+        <button class="tiny" onclick="openF('timestamps')"><svg class="ic"><use href="#i-folder"></use></svg> Timestamps</button>
+        <button class="tiny" onclick="openF('out')"><svg class="ic"><use href="#i-folder"></use></svg> Salidas</button>
+      </div>
+      <div class="status" style="margin-bottom:6px">Config crudo (projects.config.json) — para ajustes finos:</div>
+      <textarea id="config" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:10px; align-items:center">
+        <button onclick="saveConfig()" class="go"><svg class="ic"><use href="#i-save"></use></svg> Guardar</button>
+        <button onclick="formatConfig()" class="tiny"><svg class="ic"><use href="#i-sparkles"></use></svg> Formatear JSON</button>
+        <button onclick="loadConfig()" class="tiny"><svg class="ic"><use href="#i-undo"></use></svg> Recargar</button>
+        <span id="cfgmsg" class="status"></span>
+      </div>
+    </div>
+
   </div>
 
   <div id="toast"></div>
@@ -368,6 +378,42 @@ let running = false, timer = null, t0 = 0, tsCache = "";
 const $ = (s) => document.querySelector(s);
 const consoleEl = $("#console");
 const ic = (n, cls = "ic") => '<svg class="' + cls + '"><use href="#i-' + n + '"></use></svg>';
+
+// ---- Flujo guiado: reordena las secciones y arma el stepper ----
+const FLOW = [
+  { sec: "audios", label: "Audios" },
+  { sec: "guion", label: "Guion" },
+  { sec: "timestamps", label: "Timestamps" },
+  { sec: "tandas", label: "Tandas" },
+  { sec: "escenas", label: "Escenas" },
+  { sec: "look", label: "Look" },
+  { sec: "hooks", label: "Hooks" },
+  { sec: "generar", label: "Generar" },
+  { sec: "videos", label: "Videos" },
+  { sec: "avanzado", label: "Avanzado" },
+];
+function reorderFlow() {
+  const wrap = document.getElementById("stepper").parentElement;
+  // agrupa cada sección: su h3[data-sec] + los hermanos siguientes hasta el próximo data-sec
+  const sections = {};
+  let cur = null;
+  for (const el of Array.from(wrap.children)) {
+    if (el.dataset && el.dataset.sec) { cur = el.dataset.sec; sections[cur] = [el]; }
+    else if (cur) sections[cur].push(el);
+    // lo que va antes del primer data-sec (barra proyecto, nuevo proyecto, stepper, runbar, consola) queda fijo arriba
+  }
+  for (const { sec } of FLOW) if (sections[sec]) for (const el of sections[sec]) wrap.appendChild(el);
+}
+function buildStepper() {
+  const steps = FLOW.filter((f) => f.sec !== "avanzado" && f.sec !== "videos");
+  $("#stepper").innerHTML = steps.map((f, i) =>
+    '<span class="step" data-target="s-' + f.sec + '"><span class="n">' + (i + 1) + '</span>' + f.label + '</span>'
+  ).join("");
+  document.querySelectorAll(".step").forEach((s) => s.addEventListener("click", () => {
+    const el = document.getElementById(s.dataset.target);
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); document.querySelectorAll(".step").forEach((x) => x.classList.remove("active")); s.classList.add("active"); }
+  }));
+}
 
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{2190}-\u{21FF}\u{2713}\u{2717}\u{FE0F}]/gu;
 function toast(msg) {
@@ -912,6 +958,7 @@ $("#hkEnd").addEventListener("input", updateHkPreview);
 
 $("#audioUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "audio"); e.target.value = ""; });
 $("#imageUp").addEventListener("change", (e) => { uploadFiles(e.target.files, "image"); e.target.value = ""; });
+reorderFlow(); buildStepper();
 loadLooks(); refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion(); loadBlocks();
 </script>
 </body>
