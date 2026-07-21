@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>🎬 Faceless Pipeline</title>
+<title>Faceless Pipeline</title>
 <style>
   :root {
     color-scheme: dark;
@@ -13,6 +13,10 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  /* iconos SVG (reemplazan emojis) */
+  .ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+  .ic-lg { width: 19px; height: 19px; }
+  h1 .ic { width: 24px; height: 24px; vertical-align: -4px; stroke: var(--accent); }
   .wrap { max-width: 1150px; margin: 0 auto; padding: 0 22px 60px; }
   header { background: linear-gradient(120deg, #1a1030, #101528 60%, #0f1015); border-bottom: 1px solid var(--border); padding: 22px 0 18px; margin-bottom: 22px; }
   header .wrap { padding-bottom: 0; }
@@ -91,9 +95,44 @@
 </style>
 </head>
 <body>
+  <svg style="display:none" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-anchor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3 13.8 8.2 19 10 13.8 11.8 12 17 10.2 11.8 5 10 10.2 8.2 Z"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></symbol>
+    <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
+    <symbol id="i-start" viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><polyline points="9 6 16 12 9 18"/></symbol>
+    <symbol id="i-end" viewBox="0 0 24 24"><line x1="19" y1="4" x2="19" y2="20"/><polyline points="15 6 8 12 15 18"/></symbol>
+  </defs></svg>
+
   <header>
     <div class="wrap">
-      <h1>🎬 Faceless Pipeline</h1>
+      <h1><svg class="ic"><use href="#i-film"></use></svg> Faceless Pipeline</h1>
       <div class="sub">Panel de control local · un clic por paso · progreso en vivo</div>
       <div class="health" id="health"></div>
     </div>
@@ -105,40 +144,40 @@
       <select id="project"></select>
       <span id="pinfo" class="chip"></span>
       <span style="flex:1"></span>
-      <button onclick="refresh()" class="tiny">↻ Actualizar</button>
+      <button onclick="refresh()" class="tiny"><svg class="ic"><use href="#i-refresh"></use></svg> Actualizar</button>
     </div>
 
     <h3>1 · Validar</h3>
     <div class="row">
-      <button data-cmd="check" class="go">✅ Revisar config (huecos, archivos, hooks)</button>
+      <button data-cmd="check" class="go"><svg class="ic"><use href="#i-check"></use></svg> Revisar config (huecos, archivos, hooks)</button>
     </div>
 
     <h3>2 · Preparar</h3>
     <div class="row">
-      <button data-cmd="timestamps">⏱ Timestamps (Groq)</button>
-      <button data-cmd="enhance">🖼 Mejorar imágenes</button>
-      <button data-cmd="enhance-force">🖼 Mejorar (forzar)</button>
-      <button data-cmd="transcribe">💬 Subtítulos (Groq)</button>
-      <button data-cmd="master">🎚 Masterizar audio</button>
-      <button data-cmd="manifest">🧩 Manifest</button>
-      <button data-cmd="build" class="go">⚙️ Preparar TODO (build)</button>
+      <button data-cmd="timestamps"><svg class="ic"><use href="#i-clock"></use></svg> Timestamps (Groq)</button>
+      <button data-cmd="enhance"><svg class="ic"><use href="#i-image"></use></svg> Mejorar imágenes</button>
+      <button data-cmd="enhance-force"><svg class="ic"><use href="#i-image"></use></svg> Mejorar (forzar)</button>
+      <button data-cmd="transcribe"><svg class="ic"><use href="#i-message"></use></svg> Subtítulos (Groq)</button>
+      <button data-cmd="master"><svg class="ic"><use href="#i-sliders"></use></svg> Masterizar audio</button>
+      <button data-cmd="manifest"><svg class="ic"><use href="#i-layers"></use></svg> Manifest</button>
+      <button data-cmd="build" class="go"><svg class="ic"><use href="#i-settings"></use></svg> Preparar TODO (build)</button>
     </div>
 
     <h3>3 · Renderizar</h3>
     <div class="row">
-      <button data-cmd="render-all" class="go">🎬 Renderizar TODO</button>
-      <button data-cmd="render-full">🖥 Completo (H+V)</button>
-      <button data-cmd="render-clips">✂️ Clips por tanda</button>
-      <button data-cmd="render-hooks">⚓ Hooks</button>
-      <button onclick="studio()">🎛 Studio (preview)</button>
+      <button data-cmd="render-all" class="go"><svg class="ic"><use href="#i-film"></use></svg> Renderizar TODO</button>
+      <button data-cmd="render-full"><svg class="ic"><use href="#i-monitor"></use></svg> Completo (H+V)</button>
+      <button data-cmd="render-clips"><svg class="ic"><use href="#i-scissors"></use></svg> Clips por tanda</button>
+      <button data-cmd="render-hooks"><svg class="ic"><use href="#i-anchor"></use></svg> Hooks</button>
+      <button onclick="studio()"><svg class="ic"><use href="#i-play"></use></svg> Studio (preview)</button>
     </div>
 
     <h3>Carpetas rápidas</h3>
     <div class="row">
-      <button onclick="openF('audio')">📁 Audios</button>
-      <button onclick="openF('imagenes')">📁 Imágenes</button>
-      <button onclick="openF('timestamps')">📁 Timestamps</button>
-      <button onclick="openF('out')">📁 Salidas</button>
+      <button onclick="openF('audio')"><svg class="ic"><use href="#i-folder"></use></svg> Audios</button>
+      <button onclick="openF('imagenes')"><svg class="ic"><use href="#i-folder"></use></svg> Imágenes</button>
+      <button onclick="openF('timestamps')"><svg class="ic"><use href="#i-folder"></use></svg> Timestamps</button>
+      <button onclick="openF('out')"><svg class="ic"><use href="#i-folder"></use></svg> Salidas</button>
     </div>
 
     <div id="runbar">
@@ -146,31 +185,31 @@
       <span id="runlabel">Corriendo…</span>
       <div class="track"><div class="fill" id="fill"></div></div>
       <span id="runtime">0s</span>
-      <button class="stop" onclick="stopCmd()">■ Detener</button>
+      <button class="stop" onclick="stopCmd()"><svg class="ic"><use href="#i-square"></use></svg> Detener</button>
     </div>
 
     <h3>Consola <button class="tiny" onclick="document.getElementById('console').innerHTML=''">limpiar</button></h3>
     <div id="console"></div>
 
     <h3>Timestamps
-      <button class="tiny" onclick="viewTs()">👁 Ver</button>
-      <button class="tiny" onclick="copyPrompt()">📋 Copiar prompt para IA</button>
+      <button class="tiny" onclick="viewTs()"><svg class="ic"><use href="#i-eye"></use></svg> Ver</button>
+      <button class="tiny" onclick="copyPrompt()"><svg class="ic"><use href="#i-clipboard"></use></svg> Copiar prompt para IA</button>
     </h3>
     <div id="tsview"></div>
 
-    <h3>🧩 Constructor de escenas (arrastra imagen → tiempo)</h3>
+    <h3><svg class="ic"><use href="#i-layers"></use></svg> Constructor de escenas (arrastra imagen → tiempo)</h3>
     <div class="card">
       <div class="bar" style="margin-bottom:12px">
         Capítulo: <select id="sbBlock"></select>
         <button class="tiny" onclick="loadBuilder()">↻ Cargar escenas</button>
         <span style="flex:1"></span>
-        <button class="tiny" onclick="autoAssign()">✨ Auto-asignar en orden</button>
-        <button class="go" onclick="applyScenes()">✅ Aplicar al config</button>
+        <button class="tiny" onclick="autoAssign()"><svg class="ic"><use href="#i-sparkles"></use></svg> Auto-asignar en orden</button>
+        <button class="go" onclick="applyScenes()"><svg class="ic"><use href="#i-check"></use></svg> Aplicar al config</button>
       </div>
       <div style="display:flex; gap:16px">
         <div style="flex:2; min-width:0">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Escenas — suelta una imagen en cada una (click en la miniatura para quitarla)</div>
-          <div id="scenes"><span class="status">Dale "Cargar escenas" (antes corre ⏱ Timestamps).</span></div>
+          <div id="scenes"><span class="status">Dale "Cargar escenas" (antes corre Timestamps).</span></div>
         </div>
         <div style="flex:1; min-width:0">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Imágenes — arrástralas →</div>
@@ -180,7 +219,7 @@
       <div id="sbmsg" class="status" style="margin-top:10px; word-break:break-all"></div>
     </div>
 
-    <h3>⚓ Editor de hooks (clips de gancho) <button class="tiny" onclick="loadHooks()">↻ Cargar</button></h3>
+    <h3><svg class="ic"><use href="#i-anchor"></use></svg> Editor de hooks (clips de gancho) <button class="tiny" onclick="loadHooks()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button></h3>
     <div class="card">
       <div class="bar" style="margin-bottom:10px">
         Tanda: <select id="hkBlock"></select>
@@ -190,7 +229,7 @@
       </div>
       <div style="display:flex; gap:16px; flex-wrap:wrap">
         <div style="flex:2; min-width:280px">
-          <div id="hkcues"><span class="status">Dale "Cargar" (necesita subtítulos: corre 💬 Subtítulos).</span></div>
+          <div id="hkcues"><span class="status">Dale "Cargar" (necesita subtítulos: corre Subtítulos).</span></div>
         </div>
         <div style="flex:1; min-width:240px; display:flex; flex-direction:column; gap:10px">
           <div class="row" style="align-items:center">
@@ -203,7 +242,7 @@
             <input id="hkLabel" class="num" style="flex:1;width:auto" placeholder="etiqueta (opcional)">
           </div>
           <div class="row">
-            <button class="go" onclick="addHook()">➕ Agregar / actualizar hook</button>
+            <button class="go" onclick="addHook()"><svg class="ic"><use href="#i-plus"></use></svg> Agregar / actualizar hook</button>
           </div>
         </div>
       </div>
@@ -212,10 +251,10 @@
         <div id="hklist" class="row"></div>
       </div>
       <div class="row" style="margin-top:12px; align-items:center">
-        <button class="go" onclick="saveHooks()">💾 Guardar hooks</button>
-        <button class="tiny" onclick="run('manifest','Manifest')">🧩 Manifest</button>
-        <button class="tiny" onclick="run('render-hooks','Render hooks')">⚓ Renderizar hooks</button>
-        <a class="btn" href="/HOOKS.md" target="_blank"><button class="tiny">📖 Estrategia</button></a>
+        <button class="go" onclick="saveHooks()"><svg class="ic"><use href="#i-save"></use></svg> Guardar hooks</button>
+        <button class="tiny" onclick="run('manifest','Manifest')"><svg class="ic"><use href="#i-layers"></use></svg> Manifest</button>
+        <button class="tiny" onclick="run('render-hooks','Render hooks')"><svg class="ic"><use href="#i-anchor"></use></svg> Renderizar hooks</button>
+        <a class="btn" href="/HOOKS.md" target="_blank"><button class="tiny"><svg class="ic"><use href="#i-book"></use></svg> Estrategia</button></a>
         <span id="hkmsg" class="status"></span>
       </div>
     </div>
@@ -223,13 +262,13 @@
     <h3>Config (projects.config.json)</h3>
     <textarea id="config" spellcheck="false"></textarea>
     <div class="row" style="margin-top:10px; align-items:center">
-      <button onclick="saveConfig()" class="go">💾 Guardar</button>
-      <button onclick="formatConfig()" class="tiny">✨ Formatear JSON</button>
-      <button onclick="loadConfig()" class="tiny">↩ Recargar</button>
+      <button onclick="saveConfig()" class="go"><svg class="ic"><use href="#i-save"></use></svg> Guardar</button>
+      <button onclick="formatConfig()" class="tiny"><svg class="ic"><use href="#i-sparkles"></use></svg> Formatear JSON</button>
+      <button onclick="loadConfig()" class="tiny"><svg class="ic"><use href="#i-undo"></use></svg> Recargar</button>
       <span id="cfgmsg" class="status"></span>
     </div>
 
-    <h3>Videos renderizados <button class="tiny" onclick="refresh()">↻</button></h3>
+    <h3>Videos renderizados <button class="tiny" onclick="refresh()"><svg class="ic"><use href="#i-refresh"></use></svg></button></h3>
     <div id="videos"></div>
   </div>
 
@@ -239,9 +278,11 @@
 let running = false, timer = null, t0 = 0, tsCache = "";
 const $ = (s) => document.querySelector(s);
 const consoleEl = $("#console");
+const ic = (n, cls = "ic") => '<svg class="' + cls + '"><use href="#i-' + n + '"></use></svg>';
 
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{2190}-\u{21FF}\u{2713}\u{2717}\u{FE0F}]/gu;
 function toast(msg) {
-  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  const t = $("#toast"); t.textContent = String(msg).replace(EMOJI_RE, "").trim(); t.classList.add("show");
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
@@ -321,9 +362,9 @@ async function loadHealth() {
   try {
     const h = await (await fetch("/api/health")).json();
     $("#health").innerHTML =
-      '<span class="chip ' + (h.groq ? "ok" : "no") + '">' + (h.groq ? "✓" : "✗") + " Groq API</span>" +
-      '<span class="chip">🖼 ' + h.images + " imágenes procesadas</span>" +
-      '<span class="chip">⚡ ' + h.cache + " en caché</span>";
+      '<span class="chip ' + (h.groq ? "ok" : "no") + '">' + ic(h.groq ? "check" : "x") + " Groq API</span>" +
+      '<span class="chip">' + ic("image") + " " + h.images + " imágenes procesadas</span>" +
+      '<span class="chip">' + ic("zap") + " " + h.cache + " en caché</span>";
   } catch {}
 }
 
@@ -345,14 +386,15 @@ async function refresh() {
 //   moises-full-short.mp4      → vertical
 //   moises-clip-cap1-short.mp4 → vertical (clip)
 //   moises-hook-apertura-short.mp4 → hook
+const BUCKET_IC = { Horizontal: "monitor", Vertical: "phone", Hooks: "anchor", Otros: "film" };
 function parseVideo(name) {
   const m = name.match(/^(.+?)-(full|clip|hook)-(?:(.+)-)?(1080p|short)\.mp4$/i);
   if (!m) return { project: "otros", bucket: "Otros", badge: "", order: 9 };
   const [, project, kind, id, fmt] = m;
   const horizontal = /1080p/i.test(fmt);
-  if (kind === "hook") return { project, bucket: "⚓ Hooks", badge: id || "", order: 3 };
-  if (kind === "clip") return { project, bucket: horizontal ? "🖥 Horizontal" : "📱 Vertical", badge: "clip " + (id || ""), order: horizontal ? 1 : 2 };
-  return { project, bucket: horizontal ? "🖥 Horizontal" : "📱 Vertical", badge: "completo", order: horizontal ? 1 : 2 };
+  if (kind === "hook") return { project, bucket: "Hooks", badge: id || "", order: 3 };
+  if (kind === "clip") return { project, bucket: horizontal ? "Horizontal" : "Vertical", badge: "clip " + (id || ""), order: horizontal ? 1 : 2 };
+  return { project, bucket: horizontal ? "Horizontal" : "Vertical", badge: "completo", order: horizontal ? 1 : 2 };
 }
 
 function renderVideos(videos) {
@@ -369,19 +411,19 @@ function renderVideos(videos) {
   }
   for (const project of Object.keys(byProject).sort()) {
     const pdiv = document.createElement("div"); pdiv.className = "vgroup";
-    pdiv.innerHTML = '<div class="vproj">📦 ' + project + '</div>';
+    pdiv.innerHTML = '<div class="vproj">' + ic("package", "ic ic-lg") + ' ' + project + '</div>';
     const buckets = Object.entries(byProject[project]).sort((a, b) => a[1].order - b[1].order);
     for (const [bucket, data] of buckets) {
       const bd = document.createElement("div");
-      bd.innerHTML = '<div class="vbucket">' + bucket + ' <span class="status">(' + data.items.length + ')</span></div>';
+      bd.innerHTML = '<div class="vbucket">' + ic(BUCKET_IC[bucket] || "film") + ' ' + bucket + ' <span class="status">(' + data.items.length + ')</span></div>';
       const rowEl = document.createElement("div"); rowEl.className = "vrow";
       data.items.forEach((v) => {
         const d = document.createElement("div"); d.className = "vid";
         d.innerHTML =
           '<video controls preload="metadata" src="/out/' + encodeURIComponent(v.name) + '"></video>' +
           '<div class="meta"><span class="name">' + (v.badge ? '<b>' + v.badge + '</b> · ' : '') + v.size + '</span>' +
-          '<a class="btn" href="/out/' + encodeURIComponent(v.name) + '" download><button class="tiny">⬇</button></a>' +
-          '<button class="tiny" onclick="reveal(\'' + v.name + '\')">📂</button></div>';
+          '<a class="btn" href="/out/' + encodeURIComponent(v.name) + '" download><button class="tiny">' + ic("download") + '</button></a>' +
+          '<button class="tiny" onclick="reveal(\'' + v.name + '\')">' + ic("external") + '</button></div>';
         rowEl.appendChild(d);
       });
       bd.appendChild(rowEl); pdiv.appendChild(bd);
@@ -396,7 +438,7 @@ $("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#ts
 async function viewTs() {
   const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
   const view = $("#tsview");
-  if (!r.ok) { toast("No hay timestamps. Corre ⏱ Timestamps primero."); return; }
+  if (!r.ok) { toast("No hay timestamps. Corre Timestamps primero."); return; }
   tsCache = await r.text();
   view.textContent = tsCache;
   view.style.display = view.style.display === "none" || !view.style.display ? "block" : "none";
@@ -404,7 +446,7 @@ async function viewTs() {
 async function copyPrompt() {
   if (!tsCache) {
     const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
-    if (!r.ok) { toast("No hay timestamps. Corre ⏱ Timestamps primero."); return; }
+    if (!r.ok) { toast("No hay timestamps. Corre Timestamps primero."); return; }
     tsCache = await r.text();
   }
   const prompt =
@@ -420,12 +462,12 @@ async function copyPrompt() {
 async function loadConfig() { $("#config").value = await (await fetch("/api/config")).text(); $("#cfgmsg").textContent = ""; }
 function formatConfig() {
   try { $("#config").value = JSON.stringify(JSON.parse($("#config").value), null, 2); $("#cfgmsg").textContent = "✨ formateado"; }
-  catch (e) { $("#cfgmsg").textContent = "❌ JSON inválido: " + e.message; }
+  catch (e) { $("#cfgmsg").innerHTML = ic("x") + " JSON inválido: " + e.message; }
 }
 async function saveConfig() {
   const r = await fetch("/api/config", { method: "POST", body: $("#config").value });
   const j = await r.json();
-  $("#cfgmsg").textContent = j.ok ? "✅ guardado" : "❌ " + j.error;
+  $("#cfgmsg").innerHTML = j.ok ? ic("check") + " guardado" : ic("x") + " " + j.error;
   if (j.ok) { refresh(); toast("💾 Config guardada"); }
   setTimeout(() => ($("#cfgmsg").textContent = ""), 4000);
 }
@@ -465,7 +507,7 @@ function renderBuilder() {
   sbAssign = {};
   const ch = sbChapters.find((c) => c.block === $("#sbBlock").value);
   const scenes = $("#scenes"); scenes.innerHTML = "";
-  if (!ch) { scenes.innerHTML = '<span class="status">Sin escenas para este capítulo. Corre ⏱ Timestamps.</span>'; return; }
+  if (!ch) { scenes.innerHTML = '<span class="status">Sin escenas para este capítulo. Corre Timestamps.</span>'; return; }
   ch.scenes.forEach((sc, i) => {
     const row = document.createElement("div"); row.className = "scene";
     row.innerHTML = '<span class="time">' + sbFmt(sc.start) + '–' + sbFmt(sc.end) + '</span><span class="txt">' + sc.text + '</span><div class="slot" data-i="' + i + '">+</div>';
@@ -515,8 +557,8 @@ async function applyScenes() {
   if (!imgs.length) { toast("Asigna al menos una imagen"); return; }
   const r = await fetch("/api/apply-scenes", { method: "POST", body: JSON.stringify({ project: $("#project").value, block: $("#sbBlock").value, images: imgs }) });
   const j = await r.json();
-  if (j.ok) { toast("✅ Escenas aplicadas a " + $("#sbBlock").value); loadConfig(); refresh(); $("#sbmsg").textContent = "✅ Aplicado (" + imgs.length + " imgs). Ahora dale 🧩 Manifest y 🎬 Render."; }
-  else { $("#sbmsg").textContent = "❌ " + j.error; }
+  if (j.ok) { toast("Escenas aplicadas a " + $("#sbBlock").value); loadConfig(); refresh(); $("#sbmsg").innerHTML = ic("check") + " Aplicado (" + imgs.length + " imgs). Ahora dale Manifest y Render."; }
+  else { $("#sbmsg").innerHTML = ic("x") + " " + j.error; }
 }
 $("#sbBlock").addEventListener("change", renderBuilder);
 
@@ -539,12 +581,12 @@ function renderHkCues() {
   const b = hkCurBlock();
   $("#hkdur").textContent = b ? "(dura " + b.duration + "s)" : "";
   const box = $("#hkcues");
-  if (!b || !b.cues.length) { box.innerHTML = '<span class="status">Sin subtítulos para esta tanda. Corre 💬 Subtítulos (Groq).</span>'; return; }
+  if (!b || !b.cues.length) { box.innerHTML = '<span class="status">Sin subtítulos para esta tanda. Corre Subtítulos (Groq).</span>'; return; }
   box.innerHTML = "";
   b.cues.forEach((c) => {
     const row = document.createElement("div"); row.className = "hkcue"; row.dataset.s = c.start; row.dataset.e = c.end;
     row.innerHTML = '<span class="t">' + hkFmt(c.start) + '</span><span class="x">' + c.text + '</span>' +
-      '<span class="set"><button class="tiny" title="empezar aquí">⟤</button><button class="tiny" title="terminar aquí">⟥</button></span>';
+      '<span class="set"><button class="tiny" title="empezar aquí">' + ic("start") + '</button><button class="tiny" title="terminar aquí">' + ic("end") + '</button></span>';
     const [bs, be] = row.querySelectorAll("button");
     bs.onclick = () => { $("#hkStart").value = c.start.toFixed(1); updateHkPreview(); };
     be.onclick = () => { $("#hkEnd").value = c.end.toFixed(1); updateHkPreview(); };
@@ -565,9 +607,9 @@ function updateHkPreview() {
   });
   const dur = Math.max(0, e - s);
   let warn = "";
-  if (dur < 3) warn = " · ⚠️ muy corto";
-  else if (dur > 40) warn = " · ⚠️ muy largo";
-  else if (dur >= 10 && dur <= 25) warn = " · ✅ ideal";
+  if (dur < 3) warn = ' · ' + ic("alert") + ' muy corto';
+  else if (dur > 40) warn = ' · ' + ic("alert") + ' muy largo';
+  else if (dur >= 10 && dur <= 25) warn = ' · ' + ic("check") + ' ideal';
   $("#hkPrev").innerHTML = '<b>' + dur.toFixed(1) + 's</b>' + warn + '<br>' + (txt.join(" ") || "<span class=\"status\">(nada en la ventana)</span>");
 }
 function addHook() {
@@ -589,9 +631,9 @@ function renderHkList() {
     const win = h.block != null ? h.block + " " + (h.start ?? 0) + "–" + (h.end ?? "?") + "s" : (h.blocks || []).join("+");
     const chip = document.createElement("span"); chip.className = "hkchip";
     chip.innerHTML = '<b>' + h.id + '</b> <span class="status">' + win + '</span>';
-    const edit = document.createElement("button"); edit.className = "tiny"; edit.textContent = "✏"; edit.title = "editar";
+    const edit = document.createElement("button"); edit.className = "tiny"; edit.innerHTML = ic("edit"); edit.title = "editar";
     edit.onclick = () => editHook(h.id);
-    const del = document.createElement("button"); del.className = "tiny"; del.textContent = "✕"; del.title = "quitar";
+    const del = document.createElement("button"); del.className = "tiny"; del.innerHTML = ic("x"); del.title = "quitar";
     del.onclick = () => { hkHooks = hkHooks.filter((x) => x.id !== h.id); renderHkList(); };
     chip.appendChild(edit); chip.appendChild(del); box.appendChild(chip);
   });
@@ -605,7 +647,7 @@ function editHook(id) {
 async function saveHooks() {
   const r = await fetch("/api/save-hooks", { method: "POST", body: JSON.stringify({ project: $("#project").value, hooks: hkHooks }) });
   const j = await r.json();
-  $("#hkmsg").textContent = j.ok ? "✅ guardado — ahora 🧩 Manifest y ⚓ Renderizar hooks" : "❌ " + j.error;
+  $("#hkmsg").innerHTML = j.ok ? ic("check") + " guardado — ahora Manifest y Renderizar hooks" : ic("x") + " " + j.error;
   if (j.ok) { loadConfig(); toast("💾 Hooks guardados"); }
   setTimeout(() => ($("#hkmsg").textContent = ""), 5000);
 }
