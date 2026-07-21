@@ -10,8 +10,8 @@
  *
  * Uso:  node scripts/timestamps-md.mjs [--project=moises]
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -120,15 +120,31 @@ if (AUDIO) {
   process.exit(0);
 }
 
-// Modo 2: todos los audios del/los proyecto(s) en el config
+// Modo 2: AUDIO-FIRST — descubre los audios en proyectos/<id>/audio/, NO solo
+// los que ya son tanda. Así sacas los timestamps ANTES de crear las tandas
+// (que es el flujo documentado: audios → timestamps → imágenes → tandas).
 const config = JSON.parse(readFileSync(CONFIG, "utf8"));
 for (const project of config.projects) {
   if (PROJECT && project.id !== PROJECT) continue;
-  const mediaBlocks = project.blocks.filter((b) => b.card === undefined && b.audio);
-  if (mediaBlocks.length === 0) continue;
+
+  const audioDir = resolve(ROOT, `../proyectos/${project.id}/audio`);
+  let files = [];
+  try { files = readdirSync(audioDir).filter((f) => /\.(mp3|wav|m4a|aac)$/i.test(f)).sort(); } catch {}
+
+  // por si algún bloque referencia un audio fuera de esa carpeta, lo incluimos también
+  const known = new Set(files);
+  const extra = (project.blocks ?? [])
+    .filter((b) => b.audio && !known.has(basename(b.audio)))
+    .map((b) => b.audio);
+
+  if (files.length === 0 && extra.length === 0) {
+    console.warn(`⚠️  ${project.id}: no hay audios en ${audioDir}`);
+    continue;
+  }
 
   let md = header(project.title ?? project.id);
-  for (const block of mediaBlocks) md += await sectionFor(`${project.id}/${block.id}`, block.audio);
+  for (const f of files) md += await sectionFor(f.replace(/\.[^.]+$/, ""), join(audioDir, f));
+  for (const a of extra) md += await sectionFor(basename(a).replace(/\.[^.]+$/, ""), resolve(ROOT, a));
 
   const outPath = join(OUT_DIR, `${project.id}.md`);
   writeFileSync(outPath, md);
