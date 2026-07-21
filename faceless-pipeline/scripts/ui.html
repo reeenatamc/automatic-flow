@@ -491,7 +491,7 @@ function run(cmd, label) {
   es.addEventListener("done", (e) => {
     log("— terminado (código " + e.data + ") —", "done");
     es.close(); setRunning(false); refresh(); loadHealth();
-    if (/enhance|build|prepare/.test(cmd)) loadImages();
+    if (/enhance|build|prepare/.test(cmd)) { loadImages(); refreshTray(); }
     if (/transcribe|timestamps|build/.test(cmd)) { loadAudios(); if (typeof loadHooks === "function") loadHooks(); }
     toast(e.data === "0" ? "✅ Listo: " + cmd : "⚠️ Terminó con código " + e.data);
   });
@@ -643,6 +643,13 @@ async function loadBuilder() {
   renderBuilder();
 }
 function sbFmt(s) { const m = Math.floor(s / 60); const ss = (s % 60).toFixed(1).padStart(4, "0"); return m + ":" + ss; }
+// refresca las miniaturas del armador (Paso 6) SIN borrar lo que ya acomodaste
+async function refreshTray() {
+  const project = $("#project").value;
+  if (!project || !sbChapters.length) return; // solo si el armador ya se cargó
+  try { sbImages = (await (await fetch("/api/images?project=" + encodeURIComponent(project))).json()).images || []; } catch {}
+  renderTray();
+}
 function renderTray() {
   const project = $("#project").value;
   const block = $("#sbBlock").value;
