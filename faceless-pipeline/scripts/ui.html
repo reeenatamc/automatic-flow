@@ -741,9 +741,16 @@ async function uploadFiles(files, kind) {
       if ((await (await fetch(q, { method: "POST", body: buf })).json()).ok) ok++;
     } catch {}
   }
-  toast(ok + "/" + files.length + " subido(s)" + (prefix ? " como " + prefix + "-NN" : ""));
-  if (kind === "audio") loadAudios();
-  else { loadImages(); if (ok) toast(ok + " imágenes subidas como " + prefix + "-NN — dale \"Procesar imágenes\""); }
+  if (kind === "audio") { toast(ok + " audio(s) subido(s)"); loadAudios(); return; }
+  // AUTOMÁTICO: tras subir imágenes, las procesa solas (con el look elegido)
+  loadImages();
+  if (ok) { toast(ok + " subidas como " + prefix + "-NN — procesando con IA…"); await processNew(); }
+}
+// procesa SOLO las imágenes nuevas (sin --force salta las ya procesadas), con el look elegido
+async function processNew() {
+  const look = $("#lookSel").value, project = $("#project").value;
+  try { await fetch("/api/apply-look", { method: "POST", body: JSON.stringify({ project, look }) }); loadConfig(); } catch {}
+  run("enhance", "Procesar nuevas (" + look + ")");
 }
 async function renameSequence() {
   const project = $("#project").value, prefix = $("#imgBlock") ? $("#imgBlock").value : "";
@@ -800,23 +807,29 @@ async function loadImages() {
   if (!project) return;
   try { imgsCache = (await (await fetch("/api/source-images?project=" + encodeURIComponent(project))).json()).images || []; } catch { imgsCache = []; }
   imgSel = imgSel.filter((f) => imgsCache.some((i) => i.file === f)); // limpia selección obsoleta
+  imgVer++; // cache-buster para que las procesadas se refresquen tras reprocesar
   renderImgGrid();
 }
+let imgVer = 0;
 function renderImgGrid() {
   const project = $("#project").value;
   const grid = $("#imgGrid");
-  const n = imgsCache.length, na = imgsCache.filter((i) => !i.tanda).length;
-  $("#imgGridTitle").innerHTML = n ? "Imágenes en la carpeta (<b>" + n + "</b>, " + na + " sin asignar):" : "Imágenes en la carpeta:";
+  const n = imgsCache.length, na = imgsCache.filter((i) => !i.tanda).length, np = imgsCache.filter((i) => i.processed).length;
+  $("#imgGridTitle").innerHTML = n ? "Imágenes (<b>" + n + "</b> · " + np + " procesadas · " + na + " sin asignar):" : "Imágenes en la carpeta:";
   if (!n) { grid.innerHTML = '<span class="status">No hay imágenes en proyectos/' + project + '/imagenes/. Súbelas arriba.</span>'; updateImgSelCount(); return; }
   grid.innerHTML = imgsCache.map((im) => {
     const ord = imgSel.indexOf(im.file);
     const sel = ord >= 0;
+    // muestra la versión PROCESADA (con look) si existe; si no, la cruda de origen
+    const src = im.processed
+      ? "/img/" + project + "/" + encodeURIComponent(im.file.replace(/\.[^.]+$/, ".png")) + "?v=" + imgVer
+      : "/srcimg/" + project + "/" + encodeURIComponent(im.file);
     const cap = im.tanda
-      ? '<figcaption>' + im.file.replace(/\.[^.]+$/, "") + '</figcaption>'
+      ? '<figcaption>' + im.file.replace(/\.[^.]+$/, "") + (im.processed ? "" : " <span class=\"na\">· sin procesar</span>") + '</figcaption>'
       : '<figcaption class="na">sin asignar</figcaption>';
     return '<figure data-file="' + im.file.replace(/"/g, "&quot;") + '" class="' + (im.tanda ? "" : "unassigned") + (sel ? " sel" : "") + '">' +
       (sel ? '<span class="ord">' + (ord + 1) + '</span>' : '') +
-      '<img loading="lazy" src="/srcimg/' + project + '/' + encodeURIComponent(im.file) + '">' + cap + '</figure>';
+      '<img loading="lazy" src="' + src + '">' + cap + '</figure>';
   }).join("");
   grid.querySelectorAll("figure[data-file]").forEach((fig) => fig.addEventListener("click", () => {
     const f = fig.dataset.file, i = imgSel.indexOf(f);

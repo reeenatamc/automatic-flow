@@ -315,9 +315,12 @@ const server = createServer(async (req, res) => {
     try { files = readdirSync(dir).filter((f) => /\.(png|jpe?g)$/i.test(f)).sort(); } catch {}
     let blockIds = [];
     try { const cfg = JSON.parse(readFileSync(CONFIG, "utf8")); const p = (cfg.projects || []).find((x) => x.id === project); blockIds = (p?.blocks || []).filter((b) => b.audio).map((b) => b.id); } catch {}
+    // qué imágenes ya están procesadas (existe su versión .png en public/)
+    let processed = new Set();
+    try { processed = new Set(readdirSync(join(ROOT, "public", "projects", project, "images"))); } catch {}
     const images = files.map((f) => {
       const m = f.match(/^([\w-]+)-\d+\.[^.]+$/);
-      return { file: f, tanda: m && blockIds.includes(m[1]) ? m[1] : null };
+      return { file: f, tanda: m && blockIds.includes(m[1]) ? m[1] : null, processed: processed.has(f.replace(/\.[^.]+$/, ".png")) };
     });
     return json(res, { images });
   }
