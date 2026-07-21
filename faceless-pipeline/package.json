@@ -13,7 +13,7 @@
     "manifest": "node scripts/build-manifest.mjs",
     "master": "node scripts/master-audio.mjs",
     "sfx": "node scripts/generate-sfx.mjs",
-    "build": "node scripts/check.mjs && node scripts/enhance-images.mjs && node scripts/captions-from-script.mjs && node scripts/build-manifest.mjs",
+    "build": "node scripts/check.mjs && node scripts/enhance-images.mjs && node scripts/master-audio.mjs && node scripts/transcribe-cloud.mjs && node scripts/captions-from-script.mjs && node scripts/build-manifest.mjs",
     "studio": "remotion studio src/index.ts",
     "ui": "node scripts/ui-server.mjs",
     "render": "node scripts/render.mjs",

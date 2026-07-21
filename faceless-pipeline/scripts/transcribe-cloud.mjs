@@ -4,7 +4,7 @@
  * --------------------
  * Saca los SUBTITULOS directo del AUDIO, con timestamps por palabra, usando una
  * API de Whisper en la NUBE (Groq u OpenAI). La IA corre en SUS servidores: tu
- * Mac no hace nada. Groq tiene plan gratis.
+ * equipo no hace nada. Groq tiene plan gratis.
  *
  * NO necesitas el guion: transcribe el mp3 tal cual y agrupa las palabras en
  * lineas cortas (con su tiempo exacto). Escribe data/captions/<proj>__<block>.json,
@@ -108,10 +108,11 @@ async function transcribeFile(prov, filePath) {
 // ---- main ----
 const prov = provider();
 if (!prov) {
-  console.error("❌ Falta la API key. Pon una en faceless-pipeline/.env:");
-  console.error("     GROQ_API_KEY=gsk_xxxxx     (gratis: https://console.groq.com/keys)");
-  console.error("   o OPENAI_API_KEY=sk-xxxxx");
-  process.exit(1);
+  // No-fatal: así `npm run build` no se rompe por falta de key. Los subtítulos
+  // pueden venir del guion (captions-from-script) o generarse luego con la key.
+  console.warn("⚠️  Sin API key de Whisper (GROQ_API_KEY / OPENAI_API_KEY en faceless-pipeline/.env).");
+  console.warn("     Salto la transcripción por audio. Key gratis de Groq: https://console.groq.com/keys");
+  process.exit(0);
 }
 
 const config = JSON.parse(readFileSync(CONFIG, "utf8"));
@@ -121,7 +122,7 @@ if (projects.length === 0) {
   process.exit(0);
 }
 mkdirSync(CAP_DIR, { recursive: true });
-console.log(`☁️  Transcribiendo en la nube con ${prov.name} (${prov.model}). Tu Mac no corre IA.`);
+console.log(`☁️  Transcribiendo en la nube con ${prov.name} (${prov.model}). Tu equipo no corre IA.`);
 
 for (const project of projects) {
   const maxChars = project.captionMaxChars ?? MAX_CHARS;

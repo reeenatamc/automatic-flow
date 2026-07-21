@@ -24,8 +24,6 @@ const CONFIG = join(ROOT, "projects.config.json");
 const PUBLIC = join(ROOT, "public");
 const CAP_DIR = join(ROOT, "data", "captions");
 
-const imgName = (blockId, i) => `${blockId}-${String(i + 1).padStart(2, "0")}.png`;
-
 // Carga subtitulos (si existen) y los pasa a frames relativos al bloque.
 function loadCaptions(pid, bid, fps) {
   const p = join(CAP_DIR, `${pid}__${bid}.json`);

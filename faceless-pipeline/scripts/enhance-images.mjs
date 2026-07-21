@@ -43,7 +43,6 @@ const FORCE_FILMIC = process.argv.includes("--filmic");
 const REUPSCALE = process.argv.includes("--reupscale");
 const CACHE_DIR = join(BIN_DIR, "upscale-cache"); // guarda el upscale IA (sin grade) para iterar el look rápido
 
-const imgName = (blockId, i) => `${blockId}-${String(i + 1).padStart(2, "0")}.png`;
 const pad = (n) => String(n).padStart(2, "0");
 
 let sharp = null;

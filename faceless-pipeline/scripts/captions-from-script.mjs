@@ -27,6 +27,7 @@ const CONFIG = join(ROOT, "projects.config.json");
 const CAP_DIR = join(ROOT, "data", "captions");
 
 const MAX_CHARS = parseInt((process.argv.find((a) => a.startsWith("--max=")) || "").split("=")[1] || "28", 10);
+const FORCE = process.argv.includes("--force");
 
 // Parte el texto en lineas cortas (respeta puntuacion, corta por nº de chars).
 function chunk(text, maxChars) {
@@ -93,11 +94,21 @@ if (projects.length === 0) {
 mkdirSync(CAP_DIR, { recursive: true });
 
 let generated = 0,
-  missing = 0;
+  missing = 0,
+  skipped = 0;
 for (const project of projects) {
   const maxChars = project.captionMaxChars ?? MAX_CHARS;
   for (const block of project.blocks) {
     if (block.card !== undefined) continue; // los separadores no llevan subtítulos
+    const out = join(CAP_DIR, `${project.id}__${block.id}.json`);
+    // No pisar subtítulos que ya existen (p. ej. el karaoke de Whisper, que es mejor).
+    // Este script es el FALLBACK para bloques sin transcripción. --force para rehacer.
+    if (existsSync(out) && !FORCE) {
+      let prev = "?"; try { prev = JSON.parse(readFileSync(out, "utf8")).source ?? "?"; } catch {}
+      console.log(`⏭  ${project.id}/${block.id}: ya hay subtítulos (${prev}); no los piso (--force para rehacer).`);
+      skipped++;
+      continue;
+    }
     const text = getScript(ROOT, block);
     if (!text) {
       console.warn(`⚠️  ${project.id}/${block.id}: sin guion (agrega "script" o "scriptFile"). Sin subtítulos.`);
@@ -105,14 +116,13 @@ for (const project of projects) {
       continue;
     }
     const srcAudio = resolve(ROOT, block.audio);
-    const totalMs = audioDurationMs(srcAudio);
+    const totalMs = await audioDurationMs(srcAudio);
     const lines = chunk(text, maxChars);
     const captions = timeLines(lines, totalMs);
-    const out = join(CAP_DIR, `${project.id}__${block.id}.json`);
     writeFileSync(out, JSON.stringify({ source: "script", captions }, null, 2));
     generated++;
     console.log(`✅ ${project.id}/${block.id}: ${captions.length} subtítulos desde el guion (${(totalMs / 1000).toFixed(1)}s)`);
     console.log("   ej: " + captions.slice(0, 3).map((c) => `"${c.text}"`).join("  /  "));
   }
 }
-console.log(`\n${generated} bloque(s) con subtítulos${missing ? `, ${missing} sin guion` : ""}. Corre \`npm run manifest\` para incrustarlos.`);
+console.log(`\n${generated} generado(s)${skipped ? `, ${skipped} intacto(s)` : ""}${missing ? `, ${missing} sin guion` : ""}. Corre \`npm run manifest\` para incrustarlos.`);
