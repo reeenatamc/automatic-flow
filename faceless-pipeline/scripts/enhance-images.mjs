@@ -14,7 +14,7 @@
  *
  * Uso:  node scripts/enhance-images.mjs [--force] [--filmic]
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, rmSync, readdirSync, statSync } from "node:fs";
 import { execFileSync, execSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,11 +97,19 @@ function realesrgan4x(srcAbs) {
   return tmp;
 }
 
-// Real-ESRGAN 4x -> normaliza a MAX_WIDTH (sin grade) -> cachea. Reusa si ya existe.
+// ¿el archivo de origen es más nuevo que su caché? (imagen reemplazada) Si no se
+// puede leer, asumimos que sí (reprocesar) para nunca traer una versión vieja.
+function srcIsNewer(srcAbs, cacheAbs) {
+  try { return statSync(srcAbs).mtimeMs > statSync(cacheAbs).mtimeMs; } catch { return true; }
+}
+
+// Real-ESRGAN 4x -> normaliza a MAX_WIDTH (sin grade) -> cachea. Reusa SOLO si el
+// caché es igual o más nuevo que el origen (si subiste una imagen nueva con el
+// mismo nombre, el origen es más reciente → se re-ampliá, no trae la vieja).
 async function upscaleToCache(srcAbs, cacheKey) {
   mkdirSync(CACHE_DIR, { recursive: true });
   const cached = join(CACHE_DIR, `${cacheKey}.png`);
-  if (existsSync(cached) && !REUPSCALE) return { path: cached, fresh: false };
+  if (existsSync(cached) && !REUPSCALE && !srcIsNewer(srcAbs, cached)) return { path: cached, fresh: false };
   const tmp = realesrgan4x(srcAbs);
   try {
     await sharp(tmp, { failOn: "none", limitInputPixels: false })
@@ -144,7 +152,7 @@ async function processImage(srcAbs, outAbs, look, cacheKey) {
   } else {
     mkdirSync(CACHE_DIR, { recursive: true });
     normalized = join(CACHE_DIR, `${cacheKey}.png`);
-    if (!existsSync(normalized) || REUPSCALE) {
+    if (!existsSync(normalized) || REUPSCALE || srcIsNewer(srcAbs, normalized)) {
       await sharp(srcAbs, { failOn: "none", limitInputPixels: false })
         .resize({ width: MAX_WIDTH, kernel: "lanczos3", withoutEnlargement: false })
         .png({ compressionLevel: 6 })
@@ -188,7 +196,9 @@ for (const { project, srcDir, files } of plan) {
     count++;
     const tag = `(${pad(count)}/${pad(total)})`;
 
-    if (existsSync(outAbs) && !FORCE) { console.log(`${tag} ⏭  ya existe ${basename(outAbs)}`); continue; }
+    // salta solo si ya está procesada Y el origen no cambió (si la reemplazaste,
+    // el origen es más nuevo → se reprocesa, no deja la vieja).
+    if (existsSync(outAbs) && !FORCE && !srcIsNewer(srcAbs, outAbs)) { console.log(`${tag} ⏭  ya existe ${basename(outAbs)}`); continue; }
 
     process.stdout.write(`${tag} 🖼  ${file} → ${basename(outAbs)} ... `);
     try {

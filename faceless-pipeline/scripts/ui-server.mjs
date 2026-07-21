@@ -395,8 +395,10 @@ const server = createServer(async (req, res) => {
           if (existsSync(dest)) dest = join(trashDir, name.replace(/(\.[^.]+)$/, `-${Date.now()}$1`));
           renameSync(src, dest);
           n++; del.add(name);
-          // borra la versión procesada en public/ (es regenerable)
+          // borra la versión procesada en public/ (regenerable)
           try { const pub = join(pubDir, name.replace(/\.[^.]+$/, ".png")); if (existsSync(pub)) rmSync(pub, { force: true }); } catch {}
+          // borra el caché de upscale (si no, al re-subir con el mismo nombre traería la vieja)
+          try { const cache = join(ROOT, "bin", "upscale-cache", `${proj}__${name.replace(/\.[^.]+$/, "")}.png`); if (existsSync(cache)) rmSync(cache, { force: true }); } catch {}
         }
         removeImageRefs(proj, del);
         json(res, { ok: true, count: n });
