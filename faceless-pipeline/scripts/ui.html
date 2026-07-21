@@ -80,6 +80,14 @@
   #tray img { width: 78px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: grab; display: block; }
   #tray img.used { opacity: 0.28; }
   #tray .lbl { position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: #000a; padding: 1px 5px; border-radius: 3px; color: #fff; }
+  /* audios */
+  .aud { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; background: var(--panel2); }
+  .aud .an { font-weight: 600; font-size: 13px; min-width: 120px; }
+  .aud .ad { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 46px; }
+  .aud .flags { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+  .flag { font-size: 11px; padding: 2px 9px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .flag.on { color: var(--green); border-color: #4ade8040; }
+  .flag.off { color: var(--muted); opacity: .6; }
   /* hook editor */
   #hkcues { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 6px; background: #08090c; }
   .hkcue { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 12px; }
@@ -196,6 +204,15 @@
       <button class="tiny" onclick="copyPrompt()"><svg class="ic"><use href="#i-clipboard"></use></svg> Copiar prompt para IA</button>
     </h3>
     <div id="tsview"></div>
+
+    <h3><svg class="ic"><use href="#i-message"></use></svg> Audios del proyecto
+      <button class="tiny" onclick="loadAudios()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button>
+      <button class="tiny" onclick="run('master','Masterizar audio')"><svg class="ic"><use href="#i-sliders"></use></svg> Masterizar + limpiar todos</button>
+    </h3>
+    <div class="card">
+      <div class="status" style="margin-bottom:8px">Deja tus audios (capítulos/partes) en <b>proyectos/&lt;proyecto&gt;/audio/</b> y crea una tanda por cada uno.</div>
+      <div id="audios"></div>
+    </div>
 
     <h3><svg class="ic"><use href="#i-layers"></use></svg> Constructor de escenas (arrastra imagen → tiempo)</h3>
     <div class="card">
@@ -433,7 +450,7 @@ function renderVideos(videos) {
 }
 async function reveal(name) { await fetch("/api/reveal?file=" + encodeURIComponent(name)); toast("📂 Mostrando en Finder…"); }
 
-$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); });
+$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); loadAudios(); });
 
 async function viewTs() {
   const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
@@ -562,6 +579,38 @@ async function applyScenes() {
 }
 $("#sbBlock").addEventListener("change", renderBuilder);
 
+// ---- Audios del proyecto ----
+async function loadAudios() {
+  const project = $("#project").value;
+  const box = $("#audios");
+  const d = await (await fetch("/api/audios?project=" + encodeURIComponent(project))).json();
+  const auds = d.audios || [];
+  box.innerHTML = "";
+  if (!auds.length) { box.innerHTML = '<span class="status">No hay audios en proyectos/' + project + '/audio/. Deja ahí tus .mp3.</span>'; return; }
+  auds.forEach((a) => {
+    const flag = (on, label) => '<span class="flag ' + (on ? "on" : "off") + '">' + ic(on ? "check" : "x") + " " + label + "</span>";
+    const el = document.createElement("div"); el.className = "aud";
+    let right;
+    if (a.blockId) {
+      right = '<div class="flags">' +
+        '<span class="flag on">' + ic("check") + ' tanda: ' + a.blockId + '</span>' +
+        flag(a.mastered, "masterizado") + flag(a.transcribed, "subtítulos") +
+        '<span class="flag">' + ic("image") + ' ' + a.images + ' imgs</span></div>';
+    } else {
+      right = '<div class="flags"><span class="flag off">' + ic("x") + ' sin tanda</span></div>' +
+        '<button class="go" onclick="createBlock(\'' + a.file + '\')"><svg class="ic"><use href="#i-plus"></use></svg> Crear tanda</button>';
+    }
+    el.innerHTML = '<span class="an">' + ic("message") + ' ' + a.file + '</span><span class="ad">' + a.duration + 's</span>' + right;
+    box.appendChild(el);
+  });
+}
+async function createBlock(file) {
+  const r = await fetch("/api/create-block", { method: "POST", body: JSON.stringify({ project: $("#project").value, file }) });
+  const j = await r.json();
+  if (j.ok) { toast("Tanda '" + j.blockId + "' creada"); loadAudios(); loadConfig(); refresh(); }
+  else toast(j.error || "No se pudo crear");
+}
+
 // ---- Editor de hooks ----
 let hkBlocks = [], hkHooks = [];
 const hkFmt = (s) => { const m = Math.floor(s / 60); const ss = (s % 60).toFixed(1).padStart(4, "0"); return m + ":" + ss; };
@@ -655,7 +704,7 @@ $("#hkBlock").addEventListener("change", () => { $("#hkEnd").value = 0; renderHk
 $("#hkStart").addEventListener("input", updateHkPreview);
 $("#hkEnd").addEventListener("input", updateHkPreview);
 
-refresh(); loadConfig(); loadHealth(); loadHooks();
+refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios();
 </script>
 </body>
 </html>

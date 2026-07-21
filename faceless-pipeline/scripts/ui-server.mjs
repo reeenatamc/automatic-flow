@@ -6,8 +6,9 @@
 import { createServer } from "node:http";
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { audioDurationSeconds } from "./lib/audio.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -96,7 +97,7 @@ function serveVideo(req, res, filePath) {
   }
 }
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
 
@@ -309,6 +310,55 @@ const server = createServer((req, res) => {
       blocks.push({ id: b.id, duration: Math.round(duration * 10) / 10, cues });
     }
     return json(res, { blocks, hooks: p.hooks || [] });
+  }
+
+  // listar los audios de origen de un proyecto (proyectos/<id>/audio/) con su
+  // estado: ¿ya es una tanda?, ¿masterizado?, ¿transcrito?
+  if (path === "/api/audios") {
+    const project = url.searchParams.get("project") || "";
+    const audioDir = resolve(ROOT, `../proyectos/${project}/audio`);
+    let cfg = { projects: [] };
+    try { cfg = JSON.parse(readFileSync(CONFIG, "utf8")); } catch {}
+    const p = (cfg.projects || []).find((x) => x.id === project);
+    const blocks = (p?.blocks || []).filter((b) => b.audio);
+    let files = [];
+    try { files = readdirSync(audioDir).filter((f) => /\.(mp3|wav|m4a|aac)$/i.test(f)).sort(); } catch {}
+    const out = [];
+    for (const f of files) {
+      const block = blocks.find((b) => basename(b.audio) === f);
+      let duration = 0;
+      try { duration = Math.round(await audioDurationSeconds(join(audioDir, f))); } catch {}
+      const bid = block?.id;
+      out.push({
+        file: f,
+        duration,
+        blockId: bid || null,
+        mastered: bid ? existsSync(join(ROOT, "data", "mastered", `${project}__${bid}.mp3`)) : false,
+        transcribed: bid ? existsSync(join(ROOT, "data", "captions", `${project}__${bid}.json`)) : false,
+        images: bid ? (block.images || []).length : 0,
+      });
+    }
+    return json(res, { audios: out });
+  }
+
+  // crear una tanda (bloque de media) a partir de un audio suelto
+  if (path === "/api/create-block") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, file, id } = JSON.parse(body);
+        const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
+        const p = (cfg.projects || []).find((x) => x.id === project);
+        if (!p) return json(res, { ok: false, error: "proyecto no encontrado" }, 404);
+        const blockId = (id || basename(file, extname(file))).trim().replace(/\s+/g, "-");
+        if ((p.blocks || []).some((b) => b.id === blockId)) return json(res, { ok: false, error: "ya existe una tanda con ese id" }, 400);
+        (p.blocks ??= []).push({ id: blockId, audio: `../proyectos/${project}/audio/${file}`, images: [] });
+        writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+        json(res, { ok: true, blockId });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
   }
 
   // guardar los hooks de un proyecto en el config
