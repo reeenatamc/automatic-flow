@@ -269,6 +269,65 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // imágenes de ORIGEN (proyectos/<id>/imagenes/): TODAS, incluidas las crudas
+  // sin procesar (ej. "ChatGPT Image ....png"), con la tanda a la que pertenecen.
+  if (path === "/api/source-images") {
+    const project = (url.searchParams.get("project") || "").replace(/[^\w-]/g, "");
+    const dir = resolve(ROOT, `../proyectos/${project}/imagenes`);
+    let files = [];
+    try { files = readdirSync(dir).filter((f) => /\.(png|jpe?g)$/i.test(f)).sort(); } catch {}
+    let blockIds = [];
+    try { const cfg = JSON.parse(readFileSync(CONFIG, "utf8")); const p = (cfg.projects || []).find((x) => x.id === project); blockIds = (p?.blocks || []).filter((b) => b.audio).map((b) => b.id); } catch {}
+    const images = files.map((f) => {
+      const m = f.match(/^([\w-]+)-\d+\.[^.]+$/);
+      return { file: f, tanda: m && blockIds.includes(m[1]) ? m[1] : null };
+    });
+    return json(res, { images });
+  }
+
+  // servir una imagen de origen (para la galería de organización)
+  if (path.startsWith("/srcimg/")) {
+    const parts = decodeURIComponent(path.slice(8)).split("/");
+    const proj = (parts[0] || "").replace(/[^\w-]/g, "");
+    const base = resolve(ROOT, "../proyectos");
+    const file = join(base, proj, "imagenes", basename(parts[1] || ""));
+    if (file.startsWith(base) && existsSync(file)) {
+      res.writeHead(200, { "Content-Type": /\.png$/i.test(file) ? "image/png" : "image/jpeg", "Cache-Control": "max-age=60" });
+      createReadStream(file).pipe(res);
+    } else { res.writeHead(404); res.end(); }
+    return;
+  }
+
+  // asignar imágenes de origen a una tanda: las renombra <prefix>-NN en el orden dado
+  if (path === "/api/assign-images") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { project, prefix, files } = JSON.parse(body);
+        const pfx = (prefix || "").replace(/[^\w-]/g, "");
+        const proj = (project || "").replace(/[^\w-]/g, "");
+        if (!pfx || !proj || !Array.isArray(files) || !files.length) return json(res, { ok: false, error: "faltan tanda o imágenes" }, 400);
+        const dir = resolve(ROOT, `../proyectos/${proj}/imagenes`);
+        let max = 0;
+        try { for (const f of readdirSync(dir)) { const m = f.match(new RegExp("^" + pfx + "-(\\d+)\\.", "i")); if (m) max = Math.max(max, parseInt(m[1], 10)); } } catch {}
+        const names = [];
+        files.forEach((raw) => {
+          const src = join(dir, basename(raw));
+          if (!existsSync(src)) return;
+          let ext = (raw.match(/\.(png|jpe?g)$/i) || [".png"])[0].toLowerCase();
+          if (ext === ".jpeg") ext = ".jpg";
+          max += 1;
+          const nn = `${pfx}-${String(max).padStart(2, "0")}${ext}`;
+          renameSync(src, join(dir, nn));
+          names.push(nn);
+        });
+        json(res, { ok: true, count: names.length, names });
+      } catch (e) { json(res, { ok: false, error: e.message }, 400); }
+    });
+    return;
+  }
+
   if (path === "/api/apply-scenes") {
     let body = "";
     req.on("data", (c) => (body += c));
