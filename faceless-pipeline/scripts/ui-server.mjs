@@ -312,6 +312,25 @@ const server = createServer(async (req, res) => {
     return json(res, { blocks, hooks: p.hooks || [] });
   }
 
+  // guion completo (texto crudo) del proyecto: proyectos/<id>/guion.txt
+  if (path === "/api/guion") {
+    const project = url.searchParams.get("project") || "";
+    const guionPath = resolve(ROOT, `../proyectos/${project}/guion.txt`);
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try { writeFileSync(guionPath, body); json(res, { ok: true }); }
+        catch (e) { json(res, { ok: false, error: e.message }, 400); }
+      });
+      return;
+    }
+    let text = "";
+    try { text = readFileSync(guionPath, "utf8"); } catch {}
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end(text);
+  }
+
   // listar los audios de origen de un proyecto (proyectos/<id>/audio/) con su
   // estado: ¿ya es una tanda?, ¿masterizado?, ¿transcrito?
   if (path === "/api/audios") {

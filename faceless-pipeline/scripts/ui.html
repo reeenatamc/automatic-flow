@@ -205,6 +205,16 @@
     </h3>
     <div id="tsview"></div>
 
+    <h3><svg class="ic"><use href="#i-book"></use></svg> Guion completo (texto crudo)
+      <button class="tiny" onclick="loadGuion()"><svg class="ic"><use href="#i-refresh"></use></svg> Recargar</button>
+    </h3>
+    <div class="status" style="margin-bottom:6px">El guion completo de la narración, aparte de los timestamps. Se guarda en <b>proyectos/&lt;proyecto&gt;/guion.txt</b>.</div>
+    <textarea id="guion" spellcheck="false" placeholder="Pega aquí el guion completo del proyecto…"></textarea>
+    <div class="row" style="margin-top:10px; align-items:center">
+      <button onclick="saveGuion()" class="go"><svg class="ic"><use href="#i-save"></use></svg> Guardar guion</button>
+      <span id="guionmsg" class="status"></span>
+    </div>
+
     <h3><svg class="ic"><use href="#i-message"></use></svg> Audios del proyecto
       <button class="tiny" onclick="loadAudios()"><svg class="ic"><use href="#i-refresh"></use></svg> Cargar</button>
       <button class="tiny" onclick="run('master','Masterizar audio')"><svg class="ic"><use href="#i-sliders"></use></svg> Masterizar + limpiar todos</button>
@@ -450,7 +460,7 @@ function renderVideos(videos) {
 }
 async function reveal(name) { await fetch("/api/reveal?file=" + encodeURIComponent(name)); toast("📂 Mostrando en Finder…"); }
 
-$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); loadAudios(); });
+$("#project").addEventListener("change", () => { refresh(); tsCache = ""; $("#tsview").style.display = "none"; loadHooks(); loadAudios(); loadGuion(); });
 
 async function viewTs() {
   const r = await fetch("/api/timestamps?project=" + encodeURIComponent($("#project").value));
@@ -579,6 +589,19 @@ async function applyScenes() {
 }
 $("#sbBlock").addEventListener("change", renderBuilder);
 
+// ---- Guion completo ----
+async function loadGuion() {
+  $("#guion").value = await (await fetch("/api/guion?project=" + encodeURIComponent($("#project").value))).text();
+  $("#guionmsg").textContent = "";
+}
+async function saveGuion() {
+  const r = await fetch("/api/guion?project=" + encodeURIComponent($("#project").value), { method: "POST", body: $("#guion").value });
+  const j = await r.json();
+  $("#guionmsg").innerHTML = j.ok ? ic("check") + " guardado" : ic("x") + " " + j.error;
+  if (j.ok) toast("Guion guardado");
+  setTimeout(() => ($("#guionmsg").textContent = ""), 4000);
+}
+
 // ---- Audios del proyecto ----
 async function loadAudios() {
   const project = $("#project").value;
@@ -704,7 +727,7 @@ $("#hkBlock").addEventListener("change", () => { $("#hkEnd").value = 0; renderHk
 $("#hkStart").addEventListener("input", updateHkPreview);
 $("#hkEnd").addEventListener("input", updateHkPreview);
 
-refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios();
+refresh(); loadConfig(); loadHealth(); loadHooks(); loadAudios(); loadGuion();
 </script>
 </body>
 </html>
